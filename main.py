@@ -24,7 +24,7 @@ if __name__ == "__main__":
     for mesh in meshes:
         renderer.add_mesh(mesh)
 
-    eventChecker = EventChecker(
+    event_checker = EventChecker(
         {
             'forward'  : pygame.K_w,
             'left'     : pygame.K_a,
@@ -40,52 +40,54 @@ if __name__ == "__main__":
             'zoom_out' : pygame.K_v, 
         }
     )
+    
     run = True
     while (run):
 
         clock.tick(80)
 
-        eventChecker.check_key_press()
-        if eventChecker.get_state('quit'):
+        event_checker.check_key_press()
+        if event_checker.get_state('quit'):
             run = False
             
-        if eventChecker.get_state('forward'):
+        if event_checker.get_state('forward'):
             cam.translate_cam((0, 0, SPEED))
-        if eventChecker.get_state('backward'):
+        if event_checker.get_state('backward'):
             cam.translate_cam((0, 0, -SPEED))
             
-        if eventChecker.get_state('left'):
+        if event_checker.get_state('left'):
             cam.translate_cam((-SPEED, 0, 0))
-        if eventChecker.get_state('right'):
+        if event_checker.get_state('right'):
             cam.translate_cam((SPEED, 0, 0))
 
-        if eventChecker.get_state('down'):
+        if event_checker.get_state('down'):
             cam.translate_cam((0, -SPEED, 0))
-        if eventChecker.get_state('up'):
+        if event_checker.get_state('up'):
             cam.translate_cam((0, SPEED, 0))
 
-        if eventChecker.get_state('rot_left'):
+        if event_checker.get_state('rot_left'):
             cam.rotate_cam(-3, 0)
             if (cam.x_rot <= 0):
                 cam.x_rot = 360
-        if eventChecker.get_state('rot_right'):
+        if event_checker.get_state('rot_right'):
             cam.rotate_cam(3, 0)
             if (cam.x_rot >= 360):
                 cam.x_rot = 0
         
-        if eventChecker.get_state('rot_down'):
+        if event_checker.get_state('rot_down'):
             if (cam.y_rot > -90):
                 cam.rotate_cam(0, -3)
-        if eventChecker.get_state('rot_up'):
+        if event_checker.get_state('rot_up'):
             if (cam.y_rot < 90):
                 cam.rotate_cam(0, 3)
         
-        if eventChecker.get_state('zoom_in'):
+        if event_checker.get_state('zoom_in'):
             if (cam.fov < 2):
                 cam.fov += .01
-        if eventChecker.get_state('zoom_out'):
+        if event_checker.get_state('zoom_out'):
             if (cam.fov > 0):
                 cam.fov -= .01
+                
 
         screen.fill((0, 0, 0))
         renderer.render_all()

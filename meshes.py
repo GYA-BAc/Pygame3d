@@ -121,4 +121,4 @@ mesh6 = [[[j[0]+S+S+S, j[1]+S, j[2]] for j in i] for i in mesh]
 mesh6a = [[[j[0]+S+S+S, j[1], j[2]] for j in i] for i in mesh]
 
 
-meshes = [mesh]#, mesh1a, mesh2, mesh2a, mesh3, mesh3a, mesh4, mesh4a, mesh5, mesh5a, mesh6, mesh6a]
+meshes = [mesh, mesh1a, mesh2, mesh2a, mesh3a, mesh4, mesh4a, mesh5, mesh5a, mesh6, mesh6a]
