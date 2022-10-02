@@ -23,7 +23,10 @@ class Camera:
         if (self.position[0]-point[0]) >= 0:
             xz_hyp *= -1
         #final rotation (radians); cam rot + relative rot(directly in front of cam is 0 degrees rel rot)
-        xz_rot = math.radians(self.x_rot) + math.asin((point[2]-self.position[2])/xz_hyp)
+        if (xz_hyp != 0):
+            xz_rot = math.radians(self.x_rot) + math.asin((point[2]-self.position[2])/xz_hyp)
+        else:
+            xz_rot = 0
         #final values
         nx = math.cos(xz_rot)*xz_hyp + self.position[0]
         nz = math.sin(xz_rot)*xz_hyp + self.position[2]
@@ -33,7 +36,10 @@ class Camera:
         if (self.position[1]-point[1]) >= 0:
             yz_hyp *= -1
 
-        yz_rot = math.radians(self.y_rot) + math.asin((nz-self.position[2])/yz_hyp)
+        if (yz_hyp != 0):
+            yz_rot = math.radians(self.y_rot) + math.asin((nz-self.position[2])/yz_hyp)
+        else:
+            yz_rot = 0
 
         ny = math.cos(yz_rot)*yz_hyp + self.position[1]
         nz = math.sin(yz_rot)*yz_hyp + nz

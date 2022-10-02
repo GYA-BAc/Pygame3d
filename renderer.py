@@ -13,8 +13,6 @@ class Renderer3D:
     __OFFSET_Z = 0.1
     __FOV_RAD = 500
 
-    __UNIT = .5
-    
     def __init__(self, surface: pygame.surface.Surface, cam: Camera):
         #define constants
         self.__WIDTH, self.__HEIGHT = surface.get_size()
@@ -33,6 +31,7 @@ class Renderer3D:
     
     def render_all_experimental(self) -> None:
         "Experimental, render with backface cullling algorithm"
+        #num_rend = 0
         for mesh in self.meshes:
             for triangle in mesh:
 
@@ -67,11 +66,12 @@ class Renderer3D:
                 side2 = ((normal[0])**2 + (normal[1])**2 + (normal[2])**2)**(1/2)
                 side3 = ((point[0])**2 + (point[1])**2 + (point[2])**2)**(1/2)
                 
+                
                 try:
-                    angle = math.acos((-side3**2+side1**2+side2**2)/(2.0*side1*side2))
+                    angle = math.acos((side3**2-side1**2-side2**2)/(-2*side1*side2))
                     #angle = math.acos((-side3**2+side1**2+side2**2)/(2*side1*side2))
 
-                    if (angle >= math.radians(90)):
+                    if (angle > math.radians(90)):
                         continue
                 except ValueError:
                     pass
@@ -82,8 +82,9 @@ class Renderer3D:
                     self.__matrix_multiply(tri[1]),
                     self.__matrix_multiply(tri[2]),
                 )
-
+                #num_rend+=1
                 self.__draw_triangle(final)
+        #print(num_rend)
 
 
     def render_all(self) -> None:
@@ -102,15 +103,17 @@ class Renderer3D:
                     self.__matrix_multiply(self.cam.transform_about_cam(triangle[1])),
                     self.__matrix_multiply(self.cam.transform_about_cam(triangle[2])),
                 )
-
+                
                 #NOTE current backface culling algorithm only works for vertical or horizontal planes, not both
                 #cull all non horizontal planes that are facing away from player
                 if (final[2][0]<final[0][0]) and not (triangle[0][1]==triangle[1][1]==triangle[2][1]):
                    continue
-                #cull all horizontal planes facing away from player (TODO)
-                if (triangle[0][1]==triangle[1][1]==triangle[2][1]):
-                    if (final[2][1]<final[0][1]) and (final[1][1]>final[2][1]):
-                        continue
+
+                """
+                #cull all horizontal planes facing away from player (TODO; NOTE: below code doesn't work)
+                # if (triangle[0][1]==triangle[1][1]==triangle[2][1]):
+                #     if (final[2][1]<final[0][1]) and (final[1][1]>final[2][1]):
+                #         continue
                     
                 #    a = (final[2][0]<final[1][0])
                 #    if ((final[1][0]>final[2][0])) and (0<=360-self.cam.x_rot<90):
@@ -122,6 +125,7 @@ class Renderer3D:
                 #       continue
                 #    #if ((not a) if self.cam.position[1]-triangle[0][1]>0 else (a)) and (270<=360-self.cam.x_rot<=360):
                 #    #   continue
+                """
 
                 self.__draw_triangle(final)
                 numrendered += 1 #
@@ -134,16 +138,73 @@ class Renderer3D:
         self.meshes.append(mesh)
 
     def __draw_triangle(self, triangle: list) -> None: 
-        #dont render if player intersecting triangle
+        screenpoints = 0
         for point in triangle:
+            #dont render if player intersecting triangle
             if (point[2] > 1): 
                 return
+            if (0 <= point[0]+self.__WIDTH//2  <= self.__WIDTH 
+                and 0 <= self.__HEIGHT//2-point[1] <= self.__HEIGHT):
+                screenpoints += 1
+        #don't render if no points on screen
+        """NOTE: this code does not account for if all points are off screen but lines between them visible"""
+        if (screenpoints == 0):
+            return
+
+        #if one point is off screen, cut triangle at edge of screen (to make filling triangles better)
+        #NOTE this means polygons are rendered instead of triangles
+        
+        final = [] #final is a list of lines (list[tuple])
+        for line in ((triangle[2], triangle[0]), (triangle[0], triangle[1]), (triangle[1], triangle[2])):
+            p1valid = (0 <= line[0][0]+self.__WIDTH//2  <= self.__WIDTH 
+                        and 0 <= self.__HEIGHT//2-line[0][1] <= self.__HEIGHT)
+            p2valid = (0 <= line[1][0]+self.__WIDTH//2  <= self.__WIDTH 
+                        and 0 <= self.__HEIGHT//2-line[1][1] <= self.__HEIGHT)
+            
+            if (p1valid and p2valid):
+                final.append((line[0], line[1]))
+                continue
+            if (p1valid and not p2valid):
+                final.append((
+                    line[0],
+                    (
+                        -self.__WIDTH//2 if (line[1][0]+self.__WIDTH//2 < 0) else 
+                            (self.__WIDTH//2 if (line[1][0] > self.__WIDTH//2) else 
+                                line[0][0] + (line[1][0]-line[0][0])*(1+(1 if (line[1][1]>line[0][1]) else -1)*(self.__HEIGHT//2-abs(line[1][1]))/(line[1][1]-line[0][1]))),
+                        self.__HEIGHT//2 if (line[1][1] > self.__HEIGHT//2) else 
+                            (-self.__HEIGHT//2 if (line[1][1] < -self.__HEIGHT//2) else 
+                                line[0][1] + (line[1][1]-line[0][1])*(1+(1 if (line[1][0]<line[0][0]) else -1)*(abs(line[1][0])-self.__WIDTH//2)/(line[1][0]-line[0][0]))),
+                    )
+                ))
+                continue
+            if (not p1valid and p2valid):
+                final.append((
+                    (
+                        -self.__WIDTH//2 if (line[0][0]+self.__WIDTH//2 < 0) else 
+                            (self.__WIDTH//2 if (line[0][0] > self.__WIDTH//2) else 
+                                line[1][0] + (line[0][0]-line[1][0])*(1+(1 if (line[0][1]>line[1][1]) else -1)*(self.__HEIGHT//2-abs(line[0][1]))/(line[0][1]-line[1][1]))),
+                        self.__HEIGHT//2 if (line[0][1] > self.__HEIGHT//2) else 
+                            (-self.__HEIGHT//2 if (line[0][1] < -self.__HEIGHT//2) else 
+                                line[1][1] + (line[0][1]-line[1][1])*(1+(1 if (line[0][0]<line[1][0]) else -1)*(abs(line[0][0])-self.__WIDTH//2)/(line[0][0]-line[1][0]))),
+                    ),
+                    line[1]
+                ))
+                continue
+            if (not p1valid and not p2valid):
+                #TODO: add code here that determines shape boundary when 2 points off screen
+                #many cases:
+                    # one case for each side (if the line between those points intersects those sides)
+                    # case for if the line between both points intersects none of the lines
+                final.append(())
+        
+        final = (*final[0], *final[1], *final[2]) #flatten list to points (will contain repeats)
+            
         pygame.draw.polygon(
             self.surface,
             (255, 255, 255),
             #points are translated so that (0, 0) is in the center of screen
-            [(point[0]+self.__WIDTH//2, self.__HEIGHT//2-point[1]) for point in triangle],
-            width=1
+            [(point[0]+self.__WIDTH//2, self.__HEIGHT//2-point[1]) for point in final],
+            width=0
         )
 
     def __matrix_multiply(self, matrix: list) -> list:
