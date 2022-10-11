@@ -1,11 +1,16 @@
 import pygame
+
 from camera import Camera
 from renderer import Renderer3D
 from event_checker import EventChecker
 from meshes import meshes
 """
 TODO:
+edge culling (DONE NOTE: bug where point order is incorrect for if more than 3 corners)
 hide faces that are behind other faces
+texturing
+triangle class?
+
 """
 
 WIDTH = 600
@@ -23,21 +28,20 @@ if __name__ == "__main__":
     renderer = Renderer3D(screen, cam)
     for mesh in meshes:
         renderer.add_mesh(mesh)
-
     event_checker = EventChecker(
         {
-            'forward'  : pygame.K_w,
-            'left'     : pygame.K_a,
-            'backward' : pygame.K_s,
-            'right'    : pygame.K_d,
-            'down'     : pygame.K_z,
-            'up'       : pygame.K_x,
-            'rot_right': pygame.K_m,
-            'rot_left' : pygame.K_n,
-            'rot_up'   : pygame.K_u,
-            'rot_down' : pygame.K_j,
-            'zoom_in'  : pygame.K_f,
-            'zoom_out' : pygame.K_v, 
+            'forward'  : {pygame.K_w, pygame.K_UP   },
+            'left'     : {pygame.K_a, pygame.K_LEFT },
+            'backward' : {pygame.K_s, pygame.K_DOWN },
+            'right'    : {pygame.K_d, pygame.K_RIGHT},
+            'down'     : {pygame.K_z},
+            'up'       : {pygame.K_x},
+            'rot_right': {pygame.K_m},
+            'rot_left' : {pygame.K_n},
+            'rot_up'   : {pygame.K_u},
+            'rot_down' : {pygame.K_j},
+            'zoom_in'  : {pygame.K_f},
+            'zoom_out' : {pygame.K_v},
         }
     )
     
@@ -82,10 +86,10 @@ if __name__ == "__main__":
                 cam.rotate_cam(0, 3)
         
         if event_checker.get_state('zoom_in'):
-            if (cam.fov < 2):
+            if (cam.fov < 1.5):
                 cam.fov += .01
         if event_checker.get_state('zoom_out'):
-            if (cam.fov > 0):
+            if (cam.fov > .5):
                 cam.fov -= .01
                 
 
