@@ -5,33 +5,34 @@ class Camera:
     
     __slots__ = ['position', 'x_rot', 'y_rot', 'fov']
 
-    def __init__(self, position: list = [0, 0, 0], x_rot: int = 0, y_rot: int = 0):
-        self.position = position #a list of [x, y, z]
-        #rotation is measured in degrees
+    def __init__(self, position: list[float] = (0, 0, 0), x_rot: int = 0, y_rot: int = 0):
+        self.position = [position[0], position[1], position[2]] #[x, y, z]
+        # rotation is measured in degrees
         self.x_rot = x_rot
         self.y_rot = y_rot 
 
-        self.fov = 1.0 #value will be multiplied with actual fov_radius to get final
+        self.fov = 1.0 # value will be multiplied with actual fov_radius to get final
 
-    def transform_about_cam(self, point: list) -> list:
+    def transform_about_cam(self, point: list[float]) -> list[float]:
+        "Object points must be transformed around player to give illusion of movement"
 
-        #rotate about camera
+        # rotate about camera
 
-        #xz axis rotation
+        # xz axis rotation
         xz_hyp = ((point[0]-self.position[0])**2 + (point[2]-self.position[2])**2)**(1/2)
-        #account for negative hypotenuse values
+        # account for negative hypotenuse values
         if (self.position[0]-point[0]) >= 0:
             xz_hyp *= -1
-        #final rotation (radians); cam rot + relative rot(directly in front of cam is 0 degrees rel rot)
+        # final rotation (radians); cam rot + relative rot(directly in front of cam is 0 degrees rel rot)
         if (xz_hyp != 0):
             xz_rot = math.radians(self.x_rot) + math.asin((point[2]-self.position[2])/xz_hyp)
         else:
             xz_rot = 0
-        #final values
+        # final values
         nx = math.cos(xz_rot)*xz_hyp + self.position[0]
         nz = math.sin(xz_rot)*xz_hyp + self.position[2]
         
-        #yz axis rotation
+        # yz axis rotation
         yz_hyp = ((point[1]-self.position[1])**2 + (nz-self.position[2])**2)**(1/2)
         if (self.position[1]-point[1]) >= 0:
             yz_hyp *= -1
@@ -52,19 +53,19 @@ class Camera:
         ]
 
 
-    def translate_cam(self, trans_vec: list) -> None:
+    def translate_cam(self, trans_vec: list[float]) -> None:
         "translate position, accounting for camera rotation"
         self.position[0] += trans_vec[0]*math.cos(math.radians(self.x_rot))
         self.position[2] -= trans_vec[0]*math.sin(math.radians(self.x_rot))
 
-        #y position
+        # y position
         self.position[1] -= trans_vec[1]
 
-        #z
+        # z
         self.position[0] += trans_vec[2]*math.sin(math.radians(self.x_rot))
         self.position[2] += trans_vec[2]*math.cos(math.radians(self.x_rot))
 
-    def rotate_cam(self, x_rot: int, y_rot: int) -> None:
+    def rotate_cam(self, x_rot: float, y_rot: float) -> None:
         self.x_rot += x_rot
         self.y_rot += y_rot
 
