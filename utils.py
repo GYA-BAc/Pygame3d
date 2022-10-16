@@ -50,7 +50,7 @@ def seg_intersect(seg1, seg2: list[float]) -> tuple[float]:
 
 # code taken directly from https://stackoverflow.com/questions/2049582/how-to-determine-if-a-point-is-in-a-2d-triangle
 # used like a module
-def point_in_triangle(point, triangle) -> bool:
+def point_in_triangle(point: list[float], triangle: list[list[float]]) -> bool:
     """Returns True if the point is inside the triangle
     and returns False if it falls outside.
     - The argument *point* is a tuple with two elements
@@ -145,3 +145,4 @@ def merge_meshes(meshlist: list[list[list[list]]]):
 		#	meshplanes[plane] += [point for point in planes.get(plane) if point not in meshplanes[plane]]
 		
 	return newmesh
+

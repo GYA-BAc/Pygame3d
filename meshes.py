@@ -59,6 +59,6 @@ meshes = [mesh, mesh1a, mesh2, mesh2a, mesh3a, mesh4, mesh4a, mesh5, mesh5a, mes
 
 meshes1 = [
 	[
-		[[0, 0, 0], [1, 0, 0], [1, 1, 0]]
+		[[0, 0, 0], [0, 1, 0], [1, 1, 0]]
 	]
 ]

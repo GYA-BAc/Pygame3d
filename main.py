@@ -6,10 +6,18 @@ from event_checker import EventChecker
 from meshes import meshes
 """
 TODO:
-edge culling (DONE NOTE: bug where point order is incorrect for if more than 3 corners)
-hide faces that are behind other faces
+    edge culling (DONE NOTE: bug where point order is incorrect for if more than 3 corners)
+        fix by ordering final points?
+    hide faces that are behind other faces (WIP NOTE: mostly done)
 texturing
+    for cubes?
+    uv mapping?
+    REFACTOR
+    NOTE: current uv projection not taking into account distance from player
+
 triangle class?
+
+resolution handler (in class)
 
 """
 
@@ -22,10 +30,12 @@ if __name__ == "__main__":
     pygame.init()
 
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    #make a surface, which will be scaled to fit screen later, effectively changing resolution
+    lower_res = pygame.Surface((WIDTH//2, HEIGHT//2))
 
     clock = pygame.time.Clock()
-    cam = Camera(position=[0, 0, -2])
-    renderer = Renderer3D(screen, cam)
+    cam = Camera(position=(0, 0, -2))
+    renderer = Renderer3D(lower_res, cam)
     for mesh in meshes:
         renderer.add_mesh(mesh)
     event_checker = EventChecker(
@@ -93,8 +103,12 @@ if __name__ == "__main__":
                 cam.fov -= .01
                 
 
-        screen.fill((0, 0, 0))
         renderer.render_all()
+
+        # change scale to fit screen, then draw to screen
+        final = pygame.transform.scale(lower_res, (WIDTH, HEIGHT))
+        screen.blit(final, (0, 0))
         pygame.display.update()
-        
+
+    pygame.quit()
     

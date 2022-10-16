@@ -1,13 +1,81 @@
-import math
-# import numpy as np
-
 import pygame
+import numpy as np
+from numba import njit
 
 from camera import Camera
-from utils import seg_intersect, point_in_triangle
 
 
+# njit increases performance ten-fold 
+@njit
+def draw_triangle(
+    surface: np.ndarray, triangle: list, texture: np.ndarray, texture_uv: np.ndarray
+) -> None: 
+    "Note: triangles should have points in pygame notation; (0,0) in top-left corner"
 
+    texture_size = np.asarray([len(texture)-1, len(texture[0])-1])
+    surf_width, surf_height  = len(surface[0]), len(surface)
+
+    centered_tri = np.asarray([(int(point[0]+surf_width//2), int(surf_height//2-point[1])) for point in triangle])
+
+    # get list of indexes of triangle points, sorted by y value (ascending)
+    tri_order = centered_tri[:,1].argsort()
+
+    x_start, y_start = centered_tri[tri_order[0]]
+    x_middle, y_middle = centered_tri[tri_order[1]]
+    x_stop, y_stop = centered_tri[tri_order[2]]
+    
+    # get slopes of each line in tri
+    # add tiny number to denominator to prevent divide by zero
+    x_slope_1 = (x_stop - x_start)  /(y_stop - y_start + 1e-16)
+    x_slope_2 = (x_middle - x_start)/(y_middle - y_start + 1e-16)
+    x_slope_3 = (x_stop - x_middle) /(y_stop - y_middle + 1e-16)
+
+    uv_start  = texture_uv[tri_order[0]]
+    uv_middle = texture_uv[tri_order[1]]
+    uv_stop   = texture_uv[tri_order[2]]
+
+    uv_slope_1 = (uv_stop - uv_start)  /(y_stop - y_start + 1e-16)
+    uv_slope_2 = (uv_middle - uv_start)/(y_middle - y_start + 1e-16)
+    uv_slope_3 = (uv_stop - uv_middle) /(y_stop - y_middle + 1e-16)
+    
+
+    # iterate through every row of pixels in the triangle
+    #    ensure that only columns in screen are looped over (min and max is 0 and screen height)
+    for y in range(max(0, y_start), min(y_stop, surf_height)):
+        
+        # get point on left-edge of triangle (and texture)
+        x1 = x_start + int((y-y_start)*x_slope_1)
+        uv1 = uv_start + (y-y_start)*uv_slope_1
+
+        # y middle is the where the lines that the row is between changes
+        #   ex: above y_middle, the row is between line 1 and line 2, but below it,
+        #       the line is between line 3 and line 2
+        #                O
+        #       line 1  * *
+        #              *   *  line 2
+        #             O—————*—————————————
+        #               **   *    below this line (y-middle), the rows (x vals) of pixels in the triangle
+        #          line 3  ** *    are between line 3 and line 2, as opposed to line 1 and 2
+        #                     *O  
+
+        if (y < y_middle):
+            x2 = x_start + int((y-y_start)*x_slope_2)
+            uv2 = uv_start + (y-y_start)*uv_slope_2
+        else:
+            x2 = x_middle + int((y-y_middle)*x_slope_3)
+            uv2 = uv_middle + (y-y_middle)*uv_slope_3
+                
+        # flip points if they are backwards (x1 should be the smaller one)
+        if (x1 > x2):
+            x1, x2 = x2, x1
+            uv1, uv2 = uv2, uv1
+            
+        uv_slope = (uv2 - uv1)/(x2 - x1 + 1e-16)
+            
+        for x in range(max(0, x1), min(x2, surf_width)):
+            uv = uv1 + (x - x1)*uv_slope
+
+            surface[x, y] = texture[int(uv[0]*texture_size[0])][int(uv[1]*texture_size[1])]
 
 class Renderer3D:
     """Class which renders 3d meshes to a 2d surface, from a given viewpoint"""
@@ -17,7 +85,6 @@ class Renderer3D:
         '__HEIGHT', 
         '__ASPECT_RATIO', 
         '__PROJ', 
-        '__SCREEN_SIDES',
         'cam', 
         'surface', 
         'meshes',
@@ -25,7 +92,7 @@ class Renderer3D:
 
     __MAX_Z = 1000
     __OFFSET_Z = 0.1
-    __FOV_RAD = 500
+    __FOV_RAD = 360
 
 
     def __init__(self, surface: pygame.surface.Surface, cam: Camera):
@@ -39,12 +106,6 @@ class Renderer3D:
             (0, 0, self.__MAX_Z / (self.__MAX_Z - self.__OFFSET_Z), 1), 
             (0, 0, (-self.__MAX_Z * self.__OFFSET_Z) / (self.__MAX_Z - self.__OFFSET_Z), 0),
         )
-        self.__SCREEN_SIDES = (
-            ((0, 0)                       , (self.__WIDTH, 0)            ), # top
-            ((self.__WIDTH, 0)            , (self.__WIDTH, self.__HEIGHT)), # right 
-            ((self.__WIDTH, self.__HEIGHT), (0, self.__HEIGHT)           ), # bottom
-            ((0, self.__HEIGHT)           , (0, 0)                       ), # left
-        )
 
         # define instance variables that will change
         self.cam = cam
@@ -56,26 +117,58 @@ class Renderer3D:
         self.meshes.append(mesh)
 
     def render_all(self) -> None:
-        "Render all meshes the renderer owns"
+        "Render all meshes the renderer owns, clearing screen in the process"
 
         # numrendered = 0 #
-        for mesh in self.meshes:
-            for triangle in mesh:
+
+        # convert screen to numpy array for easier pixel manipulation
+        #    also clears screen
+        #surface = np.zeros((self.__WIDTH, self.__HEIGHT, 3)).astype('uint8')
+        surface = np.full((self.__WIDTH, self.__HEIGHT, 3), fill_value=(120, 170, 210)).astype('uint8')
+
+
+        # for now, texture beign rendered is just white
+        texfill = pygame.Surface((5, 5))
+        texfill.fill((255, 255, 255))
+        texture = pygame.surfarray.array3d(texfill)
+
+        texture = pygame.surfarray.array3d(pygame.image.load('Grass_tile.png'))
+
+        # texture uv coordinates
+        texture_uv = np.asarray([[0, 0], [0, 1], [1, 1]])
+
+        # apply painter's algorithm
+        ordered = [(
+            self.cam.transform_about_cam(triangle[0]),
+            self.cam.transform_about_cam(triangle[1]),
+            self.cam.transform_about_cam(triangle[2]),
+        )
+            for mes in self.meshes for triangle in mes]
+
+        ordered = sorted(ordered, 
+            key=lambda tri: (
+                    ((tri[0][0]+tri[1][0]+tri[2][0])/3)**2+
+                    ((tri[0][1]+tri[1][1]+tri[2][1])/3)**2+
+                    ((tri[0][2]+tri[1][2]+tri[2][2])/3)**2)**(1/2), 
+            reverse=True)
+        
+        for tri in ordered:
+            #for triangle in mesh:
 
                 # first apply camera transformations to triangle
                 # then, apply backface culling, not discarding triangles that aren't facing camera
                 #    (look at vertexes)
               
                 final = (
-                    self.__matrix_multiply(self.cam.transform_about_cam(triangle[0])),
-                    self.__matrix_multiply(self.cam.transform_about_cam(triangle[1])),
-                    self.__matrix_multiply(self.cam.transform_about_cam(triangle[2])),
+                    self.__matrix_multiply(tri[0]),
+                    self.__matrix_multiply(tri[1]),
+                    self.__matrix_multiply(tri[2]),
                 )
                 
                 # NOTE current backface culling algorithm only works for vertical or horizontal planes, not both
                 # cull all non horizontal planes that are facing away from player
-                if (final[2][0]<final[0][0]) and not (triangle[0][1]==triangle[1][1]==triangle[2][1]):
-                   continue
+                # if (final[2][0]<final[0][0]):# and not (triangle[0][1]==triangle[1][1]==triangle[2][1]):
+                #    continue
 
                 """
                 #cull all horizontal planes facing away from player (TODO; NOTE: below code doesn't work)
@@ -94,89 +187,20 @@ class Renderer3D:
                 #    #if ((not a) if self.cam.position[1]-triangle[0][1]>0 else (a)) and (270<=360-self.cam.x_rot<=360):
                 #    #   continue
                 """
-
-                self.__draw_triangle(final)
-                # numrendered += 1 #
-        # print(numrendered) #
-
-    def __draw_triangle(self, triangle: list[list[float]]) -> None: 
-        "Note: triangles should have points in pygame notatio; (0,0) in top-left corner"
-        # dont render if player is intersecting triangle (any vertex)
-        for point in triangle:
-            if (point[2] > 1): 
-                return
-
-        # shift all points so that (0,0) lies at the center of the screen, 
-        #  also exclude 3rd dimension
-        #  also turn into list of sides
-        centered_tri = [(point[0]+self.__WIDTH//2, self.__HEIGHT//2-point[1]) for point in triangle]
-
-        # if one point is off screen, cut triangle at edge of screen (to ensure offscreen pixels are not filled)
-        final = self.__cull_edges(centered_tri)
-        # print(final) #
-
-        if (len(final) < 3):
-            return
-        pygame.draw.polygon(
-            self.surface,
-            (255, 255, 255),
-            final,
-            width=0
-        )
-
-    def __cull_edges(self, triangle: list[list[float]]) -> list[list[float]]:
-        """If a triangle's sides go off screen, return new polygon's (potentially 3+ sides after transformation) 
-        coordinates, which have vertices strictly within screen bounds, without affecting final image"""
-       
-        # algoritm is:
-        # for side in triangle:
-        #    if intersects a side:
-        #    replace vertex with intersection
-        # edge case:
-        #    if a side lies completely outside of screen, check to see if corner vertex needed
-            
-        final = []
-        # iterate through each of the triangle's lines
-        for line in ((triangle[0], triangle[1]), (triangle[1], triangle[2]), (triangle[2], triangle[0])):
-            
-            cur = []
-            if (0 < line[0][0]  < self.__WIDTH 
-                and 0 < line[0][1] < self.__HEIGHT):
-                cur.append(line[0])
-            
-            potential_corner = False
-            for side in self.__SCREEN_SIDES:
-                pnt = seg_intersect(side, line)
-                if pnt:
-                    cur.append(pnt)
-                    potential_corner = True
-            # ensure points are in correct order
-            
-
-            if (0 < line[1][0]  < self.__WIDTH 
-                and 0 < line[1][1] < self.__HEIGHT):
-                cur.append(line[1])
-
-            # special case where point2 isn't in screen bounds, and line intersects screen side:
-                # check if corner vertex needed
-                #NOTE: this code cannot handle if more than 2 corners are found (order is incorrect)
-            elif (potential_corner):
-                corners = (
-                    self.__SCREEN_SIDES[0][0], # top left
-                    self.__SCREEN_SIDES[0][1], # top right
-                    self.__SCREEN_SIDES[2][0], # bottom right
-                    self.__SCREEN_SIDES[2][1], # bottom left
-                )
-                for corner in corners:
-                    if (point_in_triangle(corner, triangle)):
-                        cur.append(corner)
+                # dont render if player is intersecting triangle (any vertex)
+                tri_behind = False
+                for point in final:
+                    if (point[2] > 1): 
+                        tri_behind = True
+                        break
                 
+                if (not tri_behind):
+                    draw_triangle(surface, final, texture, texture_uv)
+                # numrendered += 1 #
 
-            final += cur
-            
-        # print([[f"{i:.2f}" for i in j] for j in final]) #
-        
-        return final
+        surf = pygame.surfarray.make_surface(surface) 
+        self.surface.blit(surf, (0, 0)) 
+        # print(numrendered) #
 
     def __matrix_multiply(self, matrix: list[float]) -> list[float]:
         """Used to project 3d points to 2d screen, input matrix is 3d point.
