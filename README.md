@@ -1,6 +1,8 @@
 # a project started in August 2022
 
-A 3d renderer made in python, using pygame
+Texturing added in test branch\n
+
+A 3d renderer made in python, using pygame\n
 Note that meshes are wound clockwise
 
 
