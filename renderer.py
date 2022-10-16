@@ -40,7 +40,7 @@ def draw_triangle(
     
 
     # iterate through every row of pixels in the triangle
-    #    ensure that only columns in screen are looped over (min and max is 0 and screen height)
+    #    ensure that only rows in screen are looped over (min and max is 0 and screen height)
     for y in range(max(0, y_start), min(y_stop, surf_height)):
         
         # get point on left-edge of triangle (and texture)
