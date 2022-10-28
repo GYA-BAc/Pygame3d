@@ -8,13 +8,14 @@ Dependancies:
   - pygame
   - numpy
   - numba
-
+<pre>
 Project Structure:
                    [main.py]
                ________|________
           [Renderer]     [EventChecker]
                | 
            [Camera]
+</pre>
 main.py contains:
  - An *EventChecker* instance (to get keypresses)
  - A *Renderer3d* instance to render meshes to screen
