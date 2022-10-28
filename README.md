@@ -9,6 +9,19 @@ Dependancies:
   - numpy
   - numba
 
+Project Structure:
+                   [main.py]
+               ________|________
+          [Renderer]     [EventChecker]
+               | 
+           [Camera]
+main.py contains:
+ - An *EventChecker* instance (to get keypresses)
+ - A *Renderer3d* instance to render meshes to screen
+    - Which must have an instance of a *Camera*
+
+
+
 Sources:
 
     - original inspiration 
@@ -19,5 +32,5 @@ Sources:
 
     - triangle drawing algorithm and texture mapping:
       https://github.com/FinFetChannel/SimplePython3DEngine 
-        - modified to suit needs
+        - mostly copied
 
