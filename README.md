@@ -1,6 +1,6 @@
-a project started in August 2022, by Alan Ji
+#A 3d renderer made in python, using pygame
 
-A 3d renderer made in python, using pygame
+a project started in August 2022, by Alan Ji
 
 Note that meshes are wound clockwise (for now)
 
