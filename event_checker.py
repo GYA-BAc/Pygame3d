@@ -6,10 +6,10 @@ class EventChecker:
     
     __slots__ = ['aliases', 'states']
 
-    def __init__(self, events: dict[str: set[int]]): 
+    def __init__(self, events: dict[str, set[int]]): 
         # events stored in form {'alias' : set[keys]}
         #   NOTE: pygame keys & events are just ints
-        self.aliases = {'quit': {pygame.QUIT}} | events #merge dict passed in with default using binary OR
+        self.aliases = {'quit': {}} | events # use binary OR to force dict to have 'quit'
 
         # the actual states of an alias
         #   {alias : state}
@@ -31,6 +31,7 @@ class EventChecker:
         "Must be called each frame, updates internal state of EventChecker"
 
         for event in pygame.event.get():
+            # check for screen exit regardless of keystates bound to quit
             if (event.type == pygame.QUIT):
                 self.states['quit'] = True
 
@@ -49,6 +50,6 @@ class EventChecker:
                         break
 
     def get_state(self, alias: str) -> bool:
-        "Convenience method to look up keystate given an alias"
+        "Convenience method to look up eventstate given an alias"
 
         return self.states[alias]
