@@ -6,15 +6,18 @@ from event_checker import EventChecker
 from meshes import meshes
 """
 TODO:
-hide faces that are behind other faces
+
+efficiency
+    <NEW> backface culling
 texturing
-    <DONE?> uv mapping?
-    <DONE> z-buffer
     REFACTOR
 triangle class?
     With uv coords
-    .obj file support?
+    <MEH> .obj file support?
+        <   > Trianglify obj files (all faces must have 3 vertexes)
 lighting
+    ray tracing?
+    fragment shading?
 
 """
 
@@ -26,6 +29,7 @@ FPS = 80
 # per second
 SPEED = 2.5 
 ROT_SPEED = 90 # (in degrees)
+
 FONT = pygame.font.Font(pygame.font.get_default_font(), 15)
 
 def main(use_mouse = False, debug = False):
@@ -61,10 +65,9 @@ def main(use_mouse = False, debug = False):
     )
 
     # a transparent rectangle to put text on
-    if (debug):
-        stat_area = pygame.Surface((150, 70)) 
-        stat_area.set_alpha(128)               
-        stat_area.fill((0, 0, 0))
+    stat_area = pygame.Surface((150, 70)) 
+    stat_area.set_alpha(128)               
+    stat_area.fill((0, 0, 0))
     
     run = True
     while (run):
@@ -90,7 +93,7 @@ def main(use_mouse = False, debug = False):
         if event_checker.get_state('up'):
             cam.translate_cam((0, SPEED*delta_time, 0))
         
-        # mouse rotations
+        # mouse cam movement
         if (use_mouse and pygame.mouse.get_focused()):
             pygame.mouse.set_pos((WIDTH//2, HEIGHT//2))
             mouse_trav = pygame.mouse.get_pos()
