@@ -1,21 +1,20 @@
-# A 3d renderer made in python, using pygame
-
 a project started in August 2022, by Alan Ji
 
-Note that meshes are wound clockwise (for now)
+A 3d renderer made in python, using pygame
+
+Works with counter-clockwise wound meshes
 
 Dependancies:
   - pygame
   - numpy
   - numba
-<pre>
+
 Project Structure:
                    [main.py]
                ________|________
           [Renderer]     [EventChecker]
                | 
            [Camera]
-</pre>
 main.py contains:
  - An *EventChecker* instance (to get keypresses)
  - A *Renderer3d* instance to render meshes to screen
@@ -34,4 +33,7 @@ Sources:
     - triangle drawing algorithm and texture mapping:
       https://github.com/FinFetChannel/SimplePython3DEngine 
         - mostly copied
+
+    - backface culling using surface normal calculations:
+    https://math.stackexchange.com/questions/305642/how-to-find-surface-normal-of-a-triangle 
 
