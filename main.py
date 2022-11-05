@@ -1,4 +1,6 @@
 import pygame
+#scipy is now a needed dependancy. (numba needs it)
+from scipy import __version__
 
 from camera import Camera
 from renderer import Renderer3D
