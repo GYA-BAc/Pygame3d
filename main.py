@@ -11,12 +11,25 @@ TODO:
 
 efficiency
     <NEW> backface culling
+    <   > migrate to using np arrays instead of lists
+    <   > more njit funcs?
+    <   > entire rendering func njit?
 texturing
     REFACTOR
-triangle class?
+mesh class?
+    <MEH> implement
+    <   > add support for transformations? (like rotations)
+
     With uv coords
+        <MEH> BUG uv coords (not sure yet)
+    
     <MEH> .obj file support?
         <   > Trianglify obj files (all faces must have 3 vertexes)
+        <   > counterclockwise-ify all 
+        <MEH> Texture Uvs
+        <   > REFACTOR, use new pathlib module?
+
+
 lighting
     ray tracing?
     fragment shading?
@@ -61,8 +74,6 @@ def main(use_mouse = False, debug = False):
             'rot_left' : {pygame.K_n},
             'rot_up'   : {pygame.K_u},
             'rot_down' : {pygame.K_j},
-            'zoom_in'  : {pygame.K_f},
-            'zoom_out' : {pygame.K_v},
         }
     )
 
@@ -73,6 +84,7 @@ def main(use_mouse = False, debug = False):
     
     run = True
     while (run):
+        #mesh.position[0] += .005
         
         delta_time = clock.tick(FPS)/1000
 
@@ -113,11 +125,6 @@ def main(use_mouse = False, debug = False):
         if event_checker.get_state('rot_up'):
             cam.rotate_cam(0, ROT_SPEED*delta_time)
         
-        if event_checker.get_state('zoom_in'):
-            cam.fov += .01
-        if event_checker.get_state('zoom_out'):
-            cam.fov -= .01
-
         # cam limits
         if (cam.x_rot < 0):
             cam.x_rot = 360
@@ -127,10 +134,6 @@ def main(use_mouse = False, debug = False):
             cam.y_rot = -90
         if (cam.y_rot > 90):
             cam.y_rot = 90
-        if (cam.fov > 1.5):
-            cam.fov = 1.5
-        if (cam.fov < 0.5):
-            cam.fov = 0.5
 
         renderer.render_all()
 

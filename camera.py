@@ -1,9 +1,13 @@
+import numpy as np
+import numba
 import math
+
+from meshes import Mesh
 
 class Camera:
     """Represents a viewport into the world"""
     
-    __slots__ = ['position', 'x_rot', 'y_rot', 'fov']
+    __slots__ = ['position', 'x_rot', 'y_rot']
 
     def __init__(self, position: list[float] = (0, 0, 0), x_rot: int = 0, y_rot: int = 0):
         self.position = [position[0], position[1], position[2]] #[x, y, z]
@@ -11,46 +15,74 @@ class Camera:
         self.x_rot = x_rot
         self.y_rot = y_rot 
 
-        self.fov = 1.0 # value will be multiplied with actual fov_radius to get final
+    # public interface for internal func
+    def transform_about_cam(self, mesh: Mesh) -> np.ndarray:
+        "Transform mesh about the cam to give illusion of movement"
+        return self.__transform(
+            # convert to np arrays (for numba performance)
+            np.asarray(self.position).astype('d'), 
+            np.asarray([self.x_rot, self.y_rot]).astype('d'),
+            np.asarray(mesh.position).astype('d'),
+            np.asarray(mesh.mesh).astype('d'),
+        )
 
-    def transform_about_cam(self, point: list[float]) -> list[float]:
-        "Object points must be transformed around player to give illusion of movement"
+    # njit increases performance ten-fold 
+    #   but doesn't work well with the 'self' argument 
+    #   usually passed to class methods.
+    # Therefore, use staticmethods
+    @staticmethod
+    @numba.njit
+    def __transform(
+        cam_pos:  np.ndarray, 
+        cam_rot:  np.ndarray, 
+        mesh_pos: np.ndarray,
+        mesh:     np.ndarray,
+    ):
+        "njit compiled internal function"
+        final = np.empty_like(mesh)
 
-        # rotate about camera
+        final_pos = cam_pos - mesh_pos
 
-        # xz axis rotation
-        xz_hyp = ((point[0]-self.position[0])**2 + (point[2]-self.position[2])**2)**(1/2)
-        # account for negative hypotenuse values
-        if (self.position[0]-point[0]) >= 0:
-            xz_hyp *= -1
-        # final rotation (radians); cam rot + relative rot(directly in front of cam is 0 degrees rel rot)
-        if (xz_hyp != 0):
-            xz_rot = math.radians(self.x_rot) + math.asin((point[2]-self.position[2])/xz_hyp)
-        else:
-            xz_rot = 0
-        # final values
-        nx = math.cos(xz_rot)*xz_hyp + self.position[0]
-        nz = math.sin(xz_rot)*xz_hyp + self.position[2]
-        
-        # yz axis rotation
-        yz_hyp = ((point[1]-self.position[1])**2 + (nz-self.position[2])**2)**(1/2)
-        if (self.position[1]-point[1]) >= 0:
-            yz_hyp *= -1
+        for tri_index, tri in enumerate(mesh):
+            for pt_index, point in enumerate(tri):
+                # rotate about camera
 
-        if (yz_hyp != 0):
-            yz_rot = math.radians(self.y_rot) + math.asin((nz-self.position[2])/yz_hyp)
-        else:
-            yz_rot = 0
+                # xz axis rotation
+                xz_hyp = ((point[0]-final_pos[0])**2 + (point[2]-final_pos[2])**2)**(1/2)
+                # account for negative hypotenuse values
+                if (final_pos[0]-point[0]) >= 0:
+                    xz_hyp *= -1
+                # final rotation (radians); cam rot + relative rot(directly in front of cam is 0 degrees rel rot)
+                if (xz_hyp != 0):
+                    xz_rot = math.radians(cam_rot[0]) + math.asin((point[2]-final_pos[2])/xz_hyp)
+                else:
+                    xz_rot = 0
+                # final values
+                nx = math.cos(xz_rot)*xz_hyp + final_pos[0]
+                nz = math.sin(xz_rot)*xz_hyp + final_pos[2]
 
-        ny = math.cos(yz_rot)*yz_hyp + self.position[1]
-        nz = math.sin(yz_rot)*yz_hyp + nz
-        
-        # translate point according to player position (gives illusion that player is moving)
-        return [
-            nx - self.position[0],
-            ny - self.position[1],
-            nz - self.position[2],
-        ]
+                # yz axis rotation
+                yz_hyp = ((point[1]-final_pos[1])**2 + (nz-final_pos[2])**2)**(1/2)
+                if (final_pos[1]-point[1]) >= 0:
+                    yz_hyp *= -1
+
+                if (yz_hyp != 0):
+                    yz_rot = math.radians(cam_rot[1]) + math.asin((nz-final_pos[2])/yz_hyp)
+                else:
+                    yz_rot = 0
+
+                ny = math.cos(yz_rot)*yz_hyp + final_pos[1]
+                nz = math.sin(yz_rot)*yz_hyp + nz
+
+                # translate point according to player position (gives illusion that player is moving)
+                final[tri_index][pt_index] = [
+                    nx - final_pos[0],
+                    ny - final_pos[1],
+                    nz - final_pos[2],
+                ]
+                
+        return np.asarray(final)
+                
 
 
     def translate_cam(self, trans_vec: list[float]) -> None:
