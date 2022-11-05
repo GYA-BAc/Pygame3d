@@ -217,27 +217,4 @@ def draw_triangle_affline(
 
             surface[x, y] = texture[int(uv[0]*texture_size[0])][int(uv[1]*texture_size[1])]
 
-# NOTE: only accepts triangulated meshes
-def load_obj_file(filepath: str) -> list:
 
-    with open(filepath, 'r') as file:
-        raw = file.readlines()
-        vertexes = [
-            (float(line.split()[1]), float(line.split()[2]), float(line.split()[3])) 
-                for line in raw if line[:2] == 'v '
-        ]
-        
-        scale = math.log(max([num for val in vertexes for num in val]), 10)
-        # scale vertex data to be smaller
-        vertexes = [(vtx[0]/10**scale, vtx[1]/10**scale, vtx[2]/10**scale) for vtx in vertexes]
-
-        tris = []
-        for face in [line for line in raw if line[:2] == 'f ']:
-            indexes = face.split()[1:]
-
-            # for now, we only care about vertexes in face definition
-            indexes = [i.split('/')[0] for i in indexes]
-
-            tris.append((vertexes[int(indexes[0])-1], vertexes[int(indexes[1])-1], vertexes[int(indexes[2])-1]))
-
-        return tris

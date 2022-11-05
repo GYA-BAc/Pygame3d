@@ -1,6 +1,6 @@
-a project started in August 2022, by Alan Ji
+# A 3d renderer made in python, using pygame
 
-A 3d renderer made in python, using pygame
+a project started in August 2022, by Alan Ji
 
 Works with counter-clockwise wound meshes
 
@@ -8,6 +8,7 @@ Dependancies:
   - pygame
   - numpy
   - numba
+    - scipy (dependancy of numba)
 <pre>
 Project Structure:
                    [main.py]
