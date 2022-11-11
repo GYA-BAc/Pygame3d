@@ -1,5 +1,5 @@
 import numpy as np
-import numba
+from numba import njit
 import math
 
 from meshes import Mesh
@@ -9,15 +9,15 @@ class Camera:
     
     __slots__ = ['position', 'x_rot', 'y_rot']
 
-    def __init__(self, position: list[float] = (0, 0, 0), x_rot: int = 0, y_rot: int = 0):
-        self.position = [position[0], position[1], position[2]] #[x, y, z]
+    def __init__(self, position: list[float] = (0, 0, 0), x_rot: float = 0.0, y_rot: float = 0.0):
+        self.position: list[float] = [position[0], position[1], position[2]] #[x, y, z]
         # rotation is measured in degrees
-        self.x_rot = x_rot
-        self.y_rot = y_rot 
+        self.x_rot: float = x_rot
+        self.y_rot: float = y_rot 
 
     # public interface for internal func
-    def transform_about_cam(self, mesh: Mesh) -> np.ndarray:
-        "Transform mesh about the cam to give illusion of movement"
+    def transform_about_cam(self, mesh: Mesh) -> list:
+        "Transform mesh about the cam to give illusion of movement, returns new array"
         return self.__transform(
             # convert to np arrays (for numba performance)
             np.asarray(self.position).astype('d'), 
@@ -31,13 +31,13 @@ class Camera:
     #   usually passed to class methods.
     # Therefore, use staticmethods
     @staticmethod
-    @numba.njit
+    @njit
     def __transform(
         cam_pos:  np.ndarray, 
         cam_rot:  np.ndarray, 
         mesh_pos: np.ndarray,
         mesh:     np.ndarray,
-    ):
+    ) -> np.ndarray:
         "njit compiled internal function"
         final = np.empty_like(mesh)
 

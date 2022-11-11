@@ -1,18 +1,24 @@
 import pygame
-#scipy is now a needed dependancy. (numba needs it)
+# scipy needed as a dependancy for numba
 from scipy import __version__
 
 from camera import Camera
 from renderer import Renderer3D
 from event_checker import EventChecker
-from meshes import meshes
+from meshes import Mesh, load_obj_file, global_texture_atlas
 """
 TODO:
 
+BUG ???
+    pygame.set_grab() doesn't seem to work on my machine.
+    this makes use_mouse mode not work
+
 efficiency
-    <NEW> backface culling
-    <   > migrate to using np arrays instead of lists
-    <   > more njit funcs?
+    <MEH> backface culling
+        <NEW> BUG culls triangles that are on screen
+    <MEH> migrate to using np arrays instead of lists
+        <   > reduce unnecessary transformations (from list to array, vice versa)
+    <2  > more njit funcs?
     <   > entire rendering func njit?
 texturing
     REFACTOR
@@ -25,10 +31,10 @@ mesh class?
     
     <MEH> .obj file support?
         <   > Trianglify obj files (all faces must have 3 vertexes)
-        <   > counterclockwise-ify all 
+        <NEW> counterclockwise-ify all 
         <MEH> Texture Uvs
         <   > REFACTOR, use new pathlib module?
-
+           <   > refactor loading code (rn it reads through the file 3 times)
 
 lighting
     ray tracing?
@@ -49,18 +55,11 @@ FONT = pygame.font.Font(pygame.font.get_default_font(), 15)
 
 def main(use_mouse = False, debug = False):
     pygame.init()
-
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
     if (use_mouse):
         pygame.mouse.set_visible(False)
+        pygame.event.set_grab(True)
 
-    clock = pygame.time.Clock()
-    cam = Camera(position=(0, 0, -4))
-
-    renderer = Renderer3D(screen, cam, pix_size=3)
-    for mesh in meshes:
-        renderer.add_mesh(mesh)
-
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
     event_checker = EventChecker(
         {
             'quit'     : {pygame.K_ESCAPE},
@@ -76,12 +75,41 @@ def main(use_mouse = False, debug = False):
             'rot_down' : {pygame.K_j},
         }
     )
+    clock = pygame.time.Clock()
+    cam = Camera(position=(0, 0, -4))
+
+    renderer = Renderer3D(screen, cam, pix_size=3)
+    
+    renderer.add_mesh(
+        Mesh(*load_obj_file(global_texture_atlas, "./assets/cube/cube_ccw.obj")[:-1]) # exclude last argument (textures)
+    )
+    renderer.add_mesh(
+        Mesh(
+            *load_obj_file(global_texture_atlas, "./assets/teapot/teapot.obj", scale=3),
+            position = [2, 0, 1.5]
+        )
+    )
+    # renderer.add_mesh(
+    #     Mesh(*load_obj_file(global_texture_atlas, "./assets/tri/tri.obj"))
+    # )
+
 
     # a transparent rectangle to put text on
     stat_area = pygame.Surface((150, 70)) 
     stat_area.set_alpha(128)               
     stat_area.fill((0, 0, 0))
-    
+
+    # on startup, display loading screen (before numba compiles functions)
+    screen.blit(
+        FONT.render(
+            "Loading... (this may take several seconds)", 
+            True, (255, 255, 255), None
+        ),
+        (10, 10)
+    )
+    pygame.display.update()
+
+
     run = True
     while (run):
         #mesh.position[0] += .005
@@ -108,13 +136,12 @@ def main(use_mouse = False, debug = False):
             cam.translate_cam((0, SPEED*delta_time, 0))
         
         # mouse cam movement
-        if (use_mouse and pygame.mouse.get_focused()):
-            pygame.mouse.set_pos((WIDTH//2, HEIGHT//2))
-            mouse_trav = pygame.mouse.get_pos()
-            mouse_trav = (mouse_trav[0]-WIDTH//2, HEIGHT//2-mouse_trav[1])
-            cam.rotate_cam(mouse_trav[0]//20, 0)
-            cam.rotate_cam(0, mouse_trav[1]//20)
-
+        if (use_mouse):
+            if (pygame.mouse.get_focused()):
+                mouse_trav = pygame.mouse.get_rel()
+                cam.rotate_cam(mouse_trav[0]//10, 0)
+                cam.rotate_cam(0, -mouse_trav[1]//10)
+            
         if event_checker.get_state('rot_left'):
             cam.rotate_cam(-ROT_SPEED*delta_time, 0)
         if event_checker.get_state('rot_right'):
@@ -156,11 +183,12 @@ def main(use_mouse = False, debug = False):
 
     
 if __name__ == "__main__":
-    main(
-        use_mouse=False,
-        debug=True
-    )
-
-    # after main function stops running, 
+    try:
+        main(
+            use_mouse = False,
+            debug     = True
+        )
+    finally:
+    # after main function stops running, (whether by normal exit or error)
     #   ensure pygame quits correctly
-    pygame.quit()
+        pygame.quit()

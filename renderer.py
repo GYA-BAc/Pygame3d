@@ -37,20 +37,20 @@ class Renderer3D:
             (0, 0, (-self.__MAX_Z * self.__OFFSET_Z) / (self.__MAX_Z - self.__OFFSET_Z), 0),
         )).astype('d')
 
-        self.cam = cam
-        self.pix_size = pix_size
+        self.cam: Camera = cam
+        self.pix_size: int = int(pix_size)
         if (pix_size < 1):
             raise ValueError("pix_size cannot be smaller than native screen resolution (1)")
         
         # define instance variables that will change
 
-        self.surface = surface
-        self.z_buffer = np.full(
+        self.surface: pygame.surface.Surface = surface
+        self.z_buffer: np.ndarray = np.full(
             (self.__WIDTH//self.pix_size, self.__HEIGHT//self.pix_size),
             self.__MAX_Z
         ).astype('d') # array of doubles
 
-        self.meshes = []
+        self.meshes: list[Mesh] = []
 
     def add_mesh(self, mesh: Mesh) -> None:
         # function may not have purpose
@@ -81,26 +81,19 @@ class Renderer3D:
         for mesh in self.meshes:
 
             intermed = self.cam.transform_about_cam(mesh)
-            """any sorting algorithm for entire tris goes here
-            ex: painter's algorithm
-            """ 
-            for index, tri in enumerate(intermed):
-                # backface culling culls unseen tris
-                v1 = (tri[1][0]-tri[0][0], tri[1][1]-tri[0][1], tri[1][2]-tri[0][2])
-                v2 = (tri[2][0]-tri[0][0], tri[2][1]-tri[0][1], tri[2][2]-tri[0][2])
-                nx = (v1[1]*v2[2]) - (v1[2]*v2[1])
-                ny = (v1[2]*v2[0]) - (v1[0]*v2[2])
-                nz = (v1[0]*v2[1]) - (v1[1]*v2[0])
-                # fin is the z component of the vertex normal
-                fin = nz/((nx**2+ny**2+nz**2)**(1/2) + 1e-32)
-                #   np.cross could also work here, but it calculates
-                #       the entire normal, not just the z component
-                #       (more computation)
-                if (fin < 0):
-                    continue
-                # this algorithm mostly works, 
-                # but culls a few visible triangles on the edge
 
+            """any sorting algorithm for entire tris goes here
+            ex: painter's algorithm, backface culling
+            """ 
+            # array of bools
+            backfaces = self.__get_backfaces(intermed)
+
+            for index, tri in enumerate(intermed):
+
+                # backface culling 
+                if (backfaces[index]):
+                    continue
+                
                 final_tri = (
                     # since the projection matrix is 4x4, 
                     #   triangle array must be 1x4 to use dot product
@@ -119,7 +112,12 @@ class Renderer3D:
                         surface, 
                         self.z_buffer, 
                         final_tri, 
-                        global_texture_atlas[mesh.textures[index]], 
+                        (
+                            global_texture_atlas[mesh.textures[index]]
+                                if mesh.textures[index] in global_texture_atlas
+                            else
+                                global_texture_atlas['']
+                        ), 
                         mesh.uv_mesh[index]
                     )
 
@@ -136,15 +134,43 @@ class Renderer3D:
     # Therefore, use staticmethods
     @staticmethod
     @njit
+    def __get_backfaces(faces: np.ndarray) -> np.ndarray:
+        "Return an array of bools, each corresponding to a face, determining if said face is facing backwards"
+        # credits to http://www.dgp.toronto.edu/~karan/courses/csc418/fall_2002/notes/cull.html
+        final = np.empty(len(faces), dtype=np.bool8)
+
+        for index, tri in enumerate(faces):
+            v1 = (tri[1][0]-tri[0][0], tri[1][1]-tri[0][1], tri[1][2]-tri[0][2])
+            v2 = (tri[2][0]-tri[0][0], tri[2][1]-tri[0][1], tri[2][2]-tri[0][2])
+            normal = np.cross(v1, v2)
+               
+            final[index] = (
+                ( normal[0]*(tri[0][0]) 
+                + normal[1]*(tri[0][1]) 
+                + normal[2]*(tri[0][2])) < 0
+            )
+        
+        return final
+                
+
+    @staticmethod
+    @njit
     def __matrix_multiply(mat1, mat2) -> np.ndarray:
-        """Used to project 3d points to 2d screen, input matrix is 3d point.
-        Note that result will still be a 3 element list, z val is untouched"""
+        """Used to project 3d points to 2d screen. \n
+        mat1 and mat2 must have compatible dimensions
+        Note that result will still be a 3 element list, with the z val untouched"""
+
+        # output = [
+        #     mat1[0]*mat2[0][0] + mat1[1]*mat2[1][0] + mat1[2]*mat2[2][0] + mat2[3][0],
+        #     mat1[0]*mat2[0][1] + mat1[1]*mat2[1][1] + mat1[2]*mat2[2][1] + mat2[3][1],
+        #     mat1[0]*mat2[0][2] + mat1[1]*mat2[1][2] + mat1[2]*mat2[2][2] + mat2[3][2],
+        # ] #this is equivalent to below statement
 
         output = np.dot(mat1, mat2) 
         w = mat1[0] * mat2[0][3] + mat1[1] * mat2[1][3] + mat1[2] * mat2[2][3] + mat2[3][3]
     
         if w:
-            output = np.asarray([output[0]/w, output[1]/w, output[2]])
+            output[0] /= w; output[1] /= w
     
         return output
 
