@@ -1,7 +1,7 @@
 import pygame
 import numpy as np
-import math
 import os
+from typing import Optional
 
 TEXTURE_NOT_FOUND = "./assets/Missing.png"
 
@@ -12,19 +12,18 @@ global_texture_atlas = {
 
 class Mesh:
 
-	__slots__ = ['mesh', 'uv_mesh', 'textures', 'position', 'x_rot', 'y_rot']
+	__slots__ = ['mesh', 'uv_mesh', 'textures', 'position']
 
 	def __init__(self, 
 			mesh, 	 # mesh is the only required argument
 					 #	 the rest are optional (have defaults)
 			uv_mesh  = (), 
-			textures  = (), 
+			textures = (), 
 			position = (0, 0, 0), 
 		):
 
-		self.position = [position[0], position[1], position[2]]
 
-		self.mesh = np.asarray(mesh)
+		self.mesh: np.ndarray = np.asarray(mesh)
 
 		if (uv_mesh):
 			self.uv_mesh = np.asarray(uv_mesh)
@@ -42,31 +41,61 @@ class Mesh:
 		else:
 			self.textures = ['' for _ in self.mesh]
 
+		self.position: list[float] = [position[0], position[1], position[2]]
+
 
 # NOTE: use triangulated obj files (3 vertex face elements)
-def load_obj_file(atlas: dict[str: np.ndarray], filepath: str) -> Mesh:
+def load_obj_file(
+    atlas:    dict[str: np.ndarray], 
+    filepath: str, 
+    scale:    Optional[float] = 0
+)   ->        tuple:
     """
     Load an obj file, given the filepath of said object
-    filepath:
-        str
-    returns:
-        Mesh object
+    
+    atlas:      dict {"texture name" : np.ndarray[texture data]}
+        all loaded textures are stored here
+        texturedata in meshes refer to keys in atlas
+    filepath:   str
+    scale:      float, None
+        The max size of any one face. Largest face becomes scale value. \n
+        Defaults to 0, which will enable auto-scaling \n
+        Setting scale to None preserves original values. 
+
+    returns:    tuple
+        element 1: list of faces
+        element 2: list of uv coordinates corresponding to faces
+        element 3: list of texture names (global atlas keys), 
+            also corresponding to faces
 
     Note that if object file is missing a texture, a default will be provided\n
-    similarly, if object file is missing uv coords, a default will be provided
+    Similarly, if object file is missing uv coords, a default will be provided
     """
+    # sanitize args
+    if (scale is not None) and (scale < 0):
+        raise ValueError("scale argument must be greater than zero")
+
     info = filepath.split('/')
 
     dirpath = '/'.join(info[:-1]) + '/'
     filename = info[-1]
 
+    prev_dir = os.getcwd()
     os.chdir(dirpath)
 
     with open(filename, 'r') as file:
         raw = file.readlines()
 
-        # find materials
+        # read file
         mtllibs = []
+
+        vertexes = []
+        uv_coords = []
+
+        faces = []
+        uv_faces = []
+        textures = []
+        
         for line in raw:
             if (line[:6] == 'mtllib'):
                 mtllibs.append(f"./{line.split()[1]}")
@@ -92,13 +121,6 @@ def load_obj_file(atlas: dict[str: np.ndarray], filepath: str) -> Mesh:
                             )
                         curr_mtl = ""
 
-        vertexes = []
-        uv_coords = []
-
-        faces = []
-        uv_final = []
-        textures = []
-
         curr_mtl  = ""
         for line in raw:
             if (line.strip()[:6] == 'usemtl'):
@@ -114,9 +136,13 @@ def load_obj_file(atlas: dict[str: np.ndarray], filepath: str) -> Mesh:
                         if len(line.split()) >=3 else 0.0)
                 )
         
-        # scale vertex data to be smaller
-        scale = math.log(max([num for val in vertexes for num in val]), 10)
-        vertexes = [(vtx[0]/10**scale, vtx[1]/10**scale, vtx[2]/10**scale) for vtx in vertexes]
+        # scale vertex data
+        if (scale is not None):
+            if (scale == 0):
+                scale_coef = 1/max([num for val in vertexes for num in val])
+            else:
+                scale_coef = scale/max([num for val in vertexes for num in val])
+            vertexes = [(vtx[0]*scale_coef, vtx[1]*scale_coef, vtx[2]*scale_coef) for vtx in vertexes]
         
         for line in raw:
             if (line.strip()[:2] == 'f '):
@@ -135,18 +161,15 @@ def load_obj_file(atlas: dict[str: np.ndarray], filepath: str) -> Mesh:
                 and ((len(indexes[2]) > 1) and (indexes[2][1] != ''))
                 ):
                     uv_indexes = [i[1] for i in indexes]
-                    uv_final.append((
-                        uv_coords[int(uv_indexes[0][1])-1], 
-                        uv_coords[int(uv_indexes[1][1])-1], 
-                        uv_coords[int(uv_indexes[2][1])-1],
+                    uv_faces.append((
+                        uv_coords[int(uv_indexes[0])-1], 
+                        uv_coords[int(uv_indexes[1])-1], 
+                        uv_coords[int(uv_indexes[2])-1],
                     ))
 
                 textures.append(curr_mtl)
 
+    os.chdir(prev_dir)
 
+    return (faces, uv_faces, textures)
 
-        return Mesh(faces, uv_final, textures)
-
-
-
-meshes = [load_obj_file(global_texture_atlas, "./assets/teapot/teapot.obj")]

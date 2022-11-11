@@ -2,13 +2,15 @@
 
 a project started in August 2022, by Alan Ji
 
-Works with counter-clockwise wound meshes
+Works with counter-clockwise, triangulated meshes
 
 Dependancies:
   - pygame
   - numpy
   - numba
     - scipy (dependancy of numba)
+
+    
 <pre>
 Project Structure:
                    [main.py]
@@ -17,6 +19,7 @@ Project Structure:
                | 
            [Camera]
 </pre>
+
 main.py contains:
  - An *EventChecker* instance (to get keypresses)
  - A *Renderer3d* instance to render meshes to screen
@@ -38,4 +41,13 @@ Sources:
 
     - backface culling using surface normal calculations:
     https://math.stackexchange.com/questions/305642/how-to-find-surface-normal-of-a-triangle 
+    http://www.dgp.toronto.edu/~karan/courses/csc418/fall_2002/notes/cull.html 
+
+    - obj files taken from https://people.sc.fsu.edu/~jburkardt/data/obj/obj.html 
+      - other useful info about .obj files
+          - https://people.computing.clemson.edu/~dhouse/courses/405/docs/brief-obj-file-format.html 
+          - https://www.loc.gov/preservation/digital/formats/fdd/fdd000508.shtml 
+          - https://en.wikipedia.org/wiki/Wavefront_.obj_file#Vertex_texture_coordinate_indices
+          - https://www.cs.cmu.edu/~mbz/personal/graphics/obj.html 
+
 
