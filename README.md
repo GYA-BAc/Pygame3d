@@ -33,15 +33,15 @@ Sources:
       https://www.youtube.com/watch?v=ih20l3pJoeU 
         - NOTE: only the first video of the series was followed
           along with the code from 
-        https://github.com/OneLoneCoder/Javidx9/blob/master/ConsoleGameEngine/BiggerProjects/Engine3D/OneLoneCoder_olcEngine3D_Part1.cpp (adapted from c++ to python)
+      https://github.com/OneLoneCoder/Javidx9/blob/master/ConsoleGameEngine/BiggerProjects/Engine3D/OneLoneCoder_olcEngine3D_Part1.cpp (adapted from c++ to python)
 
     - triangle drawing algorithm and texture mapping:
       https://github.com/FinFetChannel/SimplePython3DEngine 
         - mostly copied
 
     - backface culling using surface normal calculations:
-    https://math.stackexchange.com/questions/305642/how-to-find-surface-normal-of-a-triangle 
-    http://www.dgp.toronto.edu/~karan/courses/csc418/fall_2002/notes/cull.html 
+      https://math.stackexchange.com/questions/305642/how-to-find-surface-normal-of-a-triangle 
+      http://www.dgp.toronto.edu/~karan/courses/csc418/fall_2002/notes/cull.html 
 
     - obj files taken from https://people.sc.fsu.edu/~jburkardt/data/obj/obj.html 
       - other useful info about .obj files

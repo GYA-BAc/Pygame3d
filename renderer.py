@@ -62,66 +62,90 @@ class Renderer3D:
         Note that this will directly update the surface owned by renderer
         """
 
-        #numrendered = 0 #
-
         # convert screen to numpy array for easier pixel manipulation
         #    also clears screen
         #    also scale down to account for pix_size
         surface = np.full(
             (self.__WIDTH//self.pix_size, self.__HEIGHT//self.pix_size, 3), 
             fill_value=(120, 170, 210), # Background RGB
-        ).astype('uint8')
-
+            dtype=np.uint8
+        )
+        
         # clear z buffer
         self.z_buffer = np.full(
             (self.__WIDTH//self.pix_size, self.__HEIGHT//self.pix_size),
-            self.__MAX_Z
-        ).astype('d')
+            self.__MAX_Z,
+            dtype=np.double
+        )
 
-        for mesh in self.meshes:
+        # flatten all meshes into array of tris
+        triangles = [tri for mesh in self.meshes for tri in self.cam.transform_about_cam(mesh)]
 
-            intermed = self.cam.transform_about_cam(mesh)
+        # triangle clipping sometimes results in a triangle becoming a quadrilateral
+        #   ex:
+        #       | clipping across this line results in quadrilateral
+        #  * - _|             * - _     
+        #   *   | *   ---->    *    |   Since the renderer only handles triangles,
+        #    *  |*              *   |   this quad must be split into two tris
+        #     * |                *__*
 
-            """any sorting algorithm for entire tris goes here
-            ex: painter's algorithm, backface culling
-            """ 
-            # array of bools
-            backfaces = self.__get_backfaces(intermed)
+        #   final:
+        #       * - _  
+        #        * 1 /|
+        #         * /2|
+        #          *__*
 
-            for index, tri in enumerate(intermed):
+        # This means that worst case scenario, all triangles become quads.
+        # BUG NOTE FOR EACH PLANE THAT NEEDS TO BE CLIPPED AGAINST, SIZE GROWS EXPONENTIALLY
+        #      perhaps solve with clipping loop
 
-                # backface culling 
-                if (backfaces[index]):
-                    continue
-                
-                final_tri = (
-                    # since the projection matrix is 4x4, 
-                    #   triangle array must be 1x4 to use dot product
-                    #   (return val will be 1x3)
-                    self.__matrix_multiply(np.asarray([*tri[0], 1]), self.__PROJ),
-                    self.__matrix_multiply(np.asarray([*tri[1], 1]), self.__PROJ),
-                    self.__matrix_multiply(np.asarray([*tri[2], 1]), self.__PROJ),
-                )
+        buf_size = len(triangles) # offset by -1 when indexing (but not slicing)
+        
+        tri_buffer = np.empty((buf_size*2, 3, 3), dtype=np.double)
+        tri_buffer[:buf_size] = triangles
 
-                # dont render if any vertex is behind player
-                for point in final_tri:
-                    if (point[2] < 0): 
-                        break
-                else: # if not break
-                    self.__draw_triangle(
-                        surface, 
-                        self.z_buffer, 
-                        final_tri, 
-                        (
-                            global_texture_atlas[mesh.textures[index]]
-                                if mesh.textures[index] in global_texture_atlas
-                            else
-                                global_texture_atlas['']
-                        ), 
-                        mesh.uv_mesh[index]
-                    )
+        # same process with corresponding uv coords and texture keys
+        uv_buffer = np.empty((buf_size*2, 3, 2), dtype=np.double)
+        uv_buffer[:buf_size] = [coord for mesh in self.meshes for coord in mesh.uv_mesh]
 
-                    # numrendered += 1 #
+        tex_buffer = np.empty((buf_size*2), dtype=np.object0)
+        tex_buffer[:buf_size] = [key for mesh in self.meshes for key in mesh.textures]
+
+        # array of bools, indicating whether the corresponding face should be culled
+        culled_faces = np.full((buf_size*2), False, np.bool8)
+
+        self.__clip_triangles(tri_buffer, uv_buffer, tex_buffer, culled_faces, self.__CLIPPING_PLANES)
+
+        self.__get_backfaces(tri_buffer[:buf_size], culled_faces)
+        self.__project_triangles(tri_buffer[:buf_size], self.__PROJ)
+
+        #numrendered = 0 #
+        for index, tri in enumerate(tri_buffer[:buf_size]):
+            if culled_faces[index]: continue
+
+            # # if all points behind player
+            # if (tri[0][2] < 0 or tri[1][2] < 0 or tri[2][2] < 0):
+            #     continue
+            # # if all points out of bounds
+            # #if (
+            # #    tri[0]
+            # #):
+            # #    continue
+
+            self.__draw_triangle(
+                surface,
+                self.z_buffer,
+                tri,
+                global_texture_atlas.get(
+                    tex_buffer[index], 
+                    global_texture_atlas[''] # default texture if texture key not found
+                ),
+                uv_buffer[index]
+            )
+            
+            #pygame.draw.polygon(self.surface, (0, 0, 0), [(int(point[0]+self.__WIDTH//2), int(self.__HEIGHT//2-point[1])) for point in tri], width=1)
+        #pygame.draw.circle(self.surface, (255, 0 ,0), [triangles[1][0][0]+self.__WIDTH//2, self.__HEIGHT//2-triangles[1][0][1]], 10)
+            # numrendered += 1 #
 
         surf = pygame.surfarray.make_surface(surface)
         # scale back to surface size
@@ -134,45 +158,51 @@ class Renderer3D:
     # Therefore, use staticmethods
     @staticmethod
     @njit
-    def __get_backfaces(faces: np.ndarray) -> np.ndarray:
-        "Return an array of bools, each corresponding to a face, determining if said face is facing backwards"
+    def __get_backfaces(faces: np.ndarray, buffer: np.ndarray) -> None:
+        """Determine if a face is a backface. Write results into provided buffer
+        Note: winding order of faces must be CCW."""
         # credits to http://www.dgp.toronto.edu/~karan/courses/csc418/fall_2002/notes/cull.html
-        final = np.empty(len(faces), dtype=np.bool8)
 
         for index, tri in enumerate(faces):
             v1 = (tri[1][0]-tri[0][0], tri[1][1]-tri[0][1], tri[1][2]-tri[0][2])
             v2 = (tri[2][0]-tri[0][0], tri[2][1]-tri[0][1], tri[2][2]-tri[0][2])
             normal = np.cross(v1, v2)
                
-            final[index] = (
+            buffer[index] = (
                 ( normal[0]*(tri[0][0]) 
                 + normal[1]*(tri[0][1]) 
                 + normal[2]*(tri[0][2])) < 0
             )
         
-        return final
-                
-
     @staticmethod
     @njit
-    def __matrix_multiply(mat1, mat2) -> np.ndarray:
-        """Used to project 3d points to 2d screen. \n
-        mat1 and mat2 must have compatible dimensions
-        Note that result will still be a 3 element list, with the z val untouched"""
+    def __clip_triangles(tris, uvs, texs, culled_faces, planes):
+        ...
+        
+                
+    @staticmethod
+    @njit
+    def __project_triangles(tris, proj_mat) -> None:
+        
+        for tri_idx, tri in enumerate(tris):
+            for pnt_idx, point in enumerate(tri):
 
-        # output = [
-        #     mat1[0]*mat2[0][0] + mat1[1]*mat2[1][0] + mat1[2]*mat2[2][0] + mat2[3][0],
-        #     mat1[0]*mat2[0][1] + mat1[1]*mat2[1][1] + mat1[2]*mat2[2][1] + mat2[3][1],
-        #     mat1[0]*mat2[0][2] + mat1[1]*mat2[1][2] + mat1[2]*mat2[2][2] + mat2[3][2],
-        # ] #this is equivalent to below statement
+                # output = [
+                #     mat1[0]*mat2[0][0] + mat1[1]*mat2[1][0] + mat1[2]*mat2[2][0] + mat2[3][0],
+                #     mat1[0]*mat2[0][1] + mat1[1]*mat2[1][1] + mat1[2]*mat2[2][1] + mat2[3][1],
+                #     mat1[0]*mat2[0][2] + mat1[1]*mat2[1][2] + mat1[2]*mat2[2][2] + mat2[3][2],
+                # ] #this is equivalent np.dot
 
-        output = np.dot(mat1, mat2) 
-        w = mat1[0] * mat2[0][3] + mat1[1] * mat2[1][3] + mat1[2] * mat2[2][3] + mat2[3][3]
-    
-        if w:
-            output[0] /= w; output[1] /= w
-    
-        return output
+                # note that dot product must be with two similarly shaped arrays, hence the addition of 1
+                output = np.dot(np.asarray([*point, 1]), proj_mat) 
+                w = point[0]*proj_mat[0][3] + point[1]*proj_mat[1][3] + point[2]*proj_mat[2][3] + proj_mat[3][3]
+
+                if w:
+                    output[0] /= w; output[1] /= w
+
+                tris[tri_idx][pnt_idx][0] = output[0]
+                tris[tri_idx][pnt_idx][1] = output[1]
+                tris[tri_idx][pnt_idx][2] = output[2]
 
     @staticmethod
     @njit()
@@ -214,7 +244,7 @@ class Renderer3D:
         uv_slope_1 = (uv_stop - uv_start)/(y_stop - y_start + 1e-32)  
         uv_slope_2 = (uv_middle - uv_start)/(y_middle - y_start + 1e-32)  
         uv_slope_3 = (uv_stop - uv_middle)/(y_stop - y_middle + 1e-32) 
-    
+
         # min and max used to cut off rows not in screen
         for y in range(max(0, int(y_start)), min(surf_height, int(y_stop))):
             # to get start and end of each row, traverse the lines 

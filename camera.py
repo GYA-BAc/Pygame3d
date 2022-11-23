@@ -20,10 +20,10 @@ class Camera:
         "Transform mesh about the cam to give illusion of movement, returns new array"
         return self.__transform(
             # convert to np arrays (for numba performance)
-            np.asarray(self.position).astype('d'), 
-            np.asarray([self.x_rot, self.y_rot]).astype('d'),
-            np.asarray(mesh.position).astype('d'),
-            np.asarray(mesh.mesh).astype('d'),
+            np.asarray(self.position           , dtype=np.double), 
+            np.asarray([self.x_rot, self.y_rot], dtype=np.double),
+            np.asarray(mesh.position           , dtype=np.double),
+            np.asarray(mesh.mesh               , dtype=np.double),
         )
 
     # njit increases performance ten-fold 
@@ -81,7 +81,7 @@ class Camera:
                     nz - final_pos[2],
                 ]
                 
-        return np.asarray(final)
+        return np.asarray(final, dtype=np.double)
                 
 
 
