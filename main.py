@@ -14,6 +14,7 @@ BUG:
     <   > projection function is wrong (incorrect points when 1+ points out of cam)
         this is due to a lack of a clipping plane, points cannot be projected that are behind camera
         <   > implementing this would require the renderer to handle quadrilaterals
+            <   > quads = 2 tris
 
 efficiency
     <MEH> migrate to using np arrays instead of lists

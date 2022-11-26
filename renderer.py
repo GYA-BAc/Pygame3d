@@ -14,6 +14,7 @@ class Renderer3D:
         '__HEIGHT', 
         '__ASPECT_RATIO', 
         '__PROJ', 
+        '__CLIPPING_PLANES',
         'cam', 
         'pix_size',
         'surface', 
@@ -35,7 +36,11 @@ class Renderer3D:
             (0, self.__FOV_RAD, 0, 0), 
             (0, 0, self.__MAX_Z / (self.__MAX_Z - self.__OFFSET_Z), 1), 
             (0, 0, (-self.__MAX_Z * self.__OFFSET_Z) / (self.__MAX_Z - self.__OFFSET_Z), 0),
-        )).astype('d')
+        ), dtype=np.double)
+        # a plane is just 3 points
+        self.__CLIPPING_PLANES = np.asarray((
+            ((0, 0, self.__OFFSET_Z), (1, 1, self.__OFFSET_Z), (1, 0 ,self.__OFFSET_Z))
+        ), dtype=np.double)
 
         self.cam: Camera = cam
         self.pix_size: int = int(pix_size)
@@ -114,7 +119,7 @@ class Renderer3D:
         # array of bools, indicating whether the corresponding face should be culled
         culled_faces = np.full((buf_size*2), False, np.bool8)
 
-        self.__clip_triangles(tri_buffer, uv_buffer, tex_buffer, culled_faces, self.__CLIPPING_PLANES)
+        self.__clip_triangles(tri_buffer, uv_buffer, buf_size, culled_faces, self.__CLIPPING_PLANES)
 
         self.__get_backfaces(tri_buffer[:buf_size], culled_faces)
         self.__project_triangles(tri_buffer[:buf_size], self.__PROJ)
@@ -123,14 +128,14 @@ class Renderer3D:
         for index, tri in enumerate(tri_buffer[:buf_size]):
             if culled_faces[index]: continue
 
-            # # if all points behind player
-            # if (tri[0][2] < 0 or tri[1][2] < 0 or tri[2][2] < 0):
-            #     continue
-            # # if all points out of bounds
-            # #if (
-            # #    tri[0]
-            # #):
-            # #    continue
+            # if all points behind player
+            if (tri[0][2] < 0 or tri[1][2] < 0 or tri[2][2] < 0):
+                continue
+            # if all points out of bounds
+            #if (
+            #    tri[0]
+            #):
+            #    continue
 
             self.__draw_triangle(
                 surface,
@@ -158,7 +163,7 @@ class Renderer3D:
     # Therefore, use staticmethods
     @staticmethod
     @njit
-    def __get_backfaces(faces: np.ndarray, buffer: np.ndarray) -> None:
+    def __get_backfaces(faces: np.ndarray, culled_buffer: np.ndarray) -> None:
         """Determine if a face is a backface. Write results into provided buffer
         Note: winding order of faces must be CCW."""
         # credits to http://www.dgp.toronto.edu/~karan/courses/csc418/fall_2002/notes/cull.html
@@ -167,17 +172,17 @@ class Renderer3D:
             v1 = (tri[1][0]-tri[0][0], tri[1][1]-tri[0][1], tri[1][2]-tri[0][2])
             v2 = (tri[2][0]-tri[0][0], tri[2][1]-tri[0][1], tri[2][2]-tri[0][2])
             normal = np.cross(v1, v2)
-               
-            buffer[index] = (
+            
+            culled_buffer[index] = (
                 ( normal[0]*(tri[0][0]) 
                 + normal[1]*(tri[0][1]) 
                 + normal[2]*(tri[0][2])) < 0
             )
-        
+
     @staticmethod
     @njit
-    def __clip_triangles(tris, uvs, texs, culled_faces, planes):
-        ...
+    def __clip_triangles(tris, uvs, buf_size, culled_faces, planes) -> int:
+        return 0
         
                 
     @staticmethod
