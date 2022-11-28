@@ -25,6 +25,7 @@ efficiency
        <   > Refactor, currently, some functions return a new array, while some modify the input
 texturing
     REFACTOR
+    <   > global texture atlas could be a list (so texture keys can just be ints)
 mesh class?
     <MEH> implement
     <   > add support for transformations? (like rotations)
@@ -85,20 +86,20 @@ def main(use_mouse = False, debug = False):
 
     renderer = Renderer3D(screen, cam, pix_size=3)
     
-    for i in range(15):
-        for j in range(15):
-            renderer.add_mesh(
-                Mesh(*load_obj_file(global_texture_atlas, "./assets/cube/cube_ccw.obj")[:-1], position=(i, 0 if j % 2 else 1, j)) # exclude last argument (textures)
-            )
+    # for i in range(15):
+    #     for j in range(15):
+    #         renderer.add_mesh(
+    #             Mesh(*load_obj_file(global_texture_atlas, "./assets/cube/cube_ccw.obj")[:-1], position=(i, 0 if j % 2 else 1, j)) # exclude last argument (textures)
+    #         )
 
-    # renderer.add_mesh(Mesh(*load_obj_file(global_texture_atlas, "./assets/cube/cube_ccw.obj", scale=15)[:-1], position=(-5, -15, 0)))
+    renderer.add_mesh(Mesh(*load_obj_file(global_texture_atlas, "./assets/cube/cube_ccw.obj", scale=15)[:-1], position=(-5, -15, 0)))
 
-    renderer.add_mesh(
-        Mesh(
-            *load_obj_file(global_texture_atlas, "./assets/teapot/teapot.obj", scale=3),
-            position = [2, 3, 1.5]
-        )
-    )
+    # renderer.add_mesh(
+    #     Mesh(
+    #         *load_obj_file(global_texture_atlas, "./assets/teapot/teapot.obj", scale=3),
+    #         position = [2, 3, 1.5]
+    #     )
+    # )
 
     # renderer.add_mesh(
     #     Mesh(*load_obj_file(global_texture_atlas, "./assets/tri/tri.obj"))
