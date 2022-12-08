@@ -40,7 +40,8 @@ class Renderer3D:
 
         # a plane is just 3 points (ccw faces towards cam)
         self.__CLIPPING_PLANES = np.asarray((
-            ((0, 0, self.__OFFSET_Z), (1, 1, self.__OFFSET_Z), (1, 0 ,self.__OFFSET_Z)),
+            ((0, 0, self.__OFFSET_Z*10+1), (1, 1, self.__OFFSET_Z*10+1), (1, 0 , self.__OFFSET_Z*10+1)), # front facing
+            # ((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 1.0, 1.0)),
         ), dtype=np.double)
 
         self.cam: Camera = cam
@@ -83,7 +84,6 @@ class Renderer3D:
             self.__MAX_Z,
             dtype=np.double
         )
-
         # flatten all meshes into array of tris
         triangles = np.asarray([tri for mesh in self.meshes for tri in self.cam.transform_about_cam(mesh)], dtype=np.double)
         
@@ -94,10 +94,9 @@ class Renderer3D:
         # array of bools, indicating whether the corresponding face should be culled
         culled_faces = np.full((len(triangles)), False, np.bool8)
 
-        for plane in self.__CLIPPING_PLANES:
-            triangles, uv_coords, textures, culled_faces = self.__get_clipped(
-                    triangles, uv_coords, textures, culled_faces, plane
-            )
+        triangles, uv_coords, textures, culled_faces = self.__get_clipped(
+                triangles, uv_coords, textures, culled_faces, self.__CLIPPING_PLANES,
+        )
         
         self.__get_backfaces(triangles, culled_faces)
         self.__project_triangles(triangles, self.__PROJ)
@@ -105,15 +104,6 @@ class Renderer3D:
         #numrendered = 0 #
         for index, tri in enumerate(triangles):
             if culled_faces[index]: continue
-
-            # if all points behind player
-            # if (tri[0][2] < self.__OFFSET_Z or tri[1][2] < self.__OFFSET_Z or tri[2][2] < self.__OFFSET_Z):
-            #     continue
-            # if all points out of bounds
-            #if (
-            #    tri[0]
-            #):
-            #    continue
 
             self.__draw_triangle(
                 surface,
@@ -124,10 +114,10 @@ class Renderer3D:
             )
             
             #pygame.draw.polygon(self.surface, (0, 0, 0), [(int(point[0]+self.__WIDTH//2), int(self.__HEIGHT//2-point[1])) for point in tri], width=1)
-        #pygame.draw.circle(self.surface, (255, 0 ,0), [triangles[1][0][0]+self.__WIDTH//2, self.__HEIGHT//2-triangles[1][0][1]], 10)
             # numrendered += 1 #
 
         surf = pygame.surfarray.make_surface(surface)
+        # pygame.draw.circle(surf, (255, 0 ,0), [triangles[1][2][0]+self.__WIDTH//2//self.pix_size, self.__HEIGHT//2//self.pix_size-triangles[1][2][1]], 15)
         # scale back to surface size
         surf = pygame.transform.scale(surf, (self.__WIDTH, self.__HEIGHT))
         self.surface.blit(surf, (0, 0)) 
@@ -144,16 +134,14 @@ class Renderer3D:
         # credits to http://www.dgp.toronto.edu/~karan/courses/csc418/fall_2002/notes/cull.html
 
         for index, tri in enumerate(faces):
-            v1 = (tri[1][0]-tri[0][0], tri[1][1]-tri[0][1], tri[1][2]-tri[0][2])
-            v2 = (tri[2][0]-tri[0][0], tri[2][1]-tri[0][1], tri[2][2]-tri[0][2])
-            normal = np.cross(v1, v2)
+            normal = np.cross(tri[1]-tri[0], tri[2]-tri[0])
             
             if (not culled_buffer[index]):
                 culled_buffer[index] = np.sum(normal*tri[0]) < 0
 
     @staticmethod
     @numba.njit
-    def __get_clipped(tris, uvs, texs, culled_faces, plane) -> tuple:
+    def __get_clipped(tris, uvs, texs, culled_faces, planes) -> tuple:
         """
         Clip triangles against given plane. \n
         Args:
@@ -163,80 +151,108 @@ class Renderer3D:
             culled_faces : array of bool, denoting whether corresponding face is culled
                 provide tris length array filled with false if none are culled
             plane        : array representing a plane, denoted by 3 points (order matters)
-        Returns: tuple
-            A tuple of results, element 1 being the new array of tris, 2 new uvs, etc.
-            Note that original arrays are modified as a side-effect (incorrect data)
+        Returns: 
+            tuple:
+                A tuple of results, element 1 being the new array of tris, 2 new uvs, etc.
+                Note that original arrays are scrambled as a side-effect (incorrect) 
         """
         # triangle clipping sometimes results in a triangle becoming a quadrilateral
         #   ex:
-        #       | clipping across this line results in quadrilateral
-        #  * - _ |            * - _     
-        #   *    | *  ---->    *    |   Since the renderer only handles triangles,
-        #    *   |*             *   |   this quad must be split into two tris
-        #     *_-|               *_-*
-
-        #   final:
-        #       * - _  
-        #        * 1 /|
-        #         * /2|
-        #          *_-*
-        
+        #        clipping across this line results in quadrilateral
+        #  * - _ |        * - _ |      * - _     
+        #   *    | *  -->  *    |  -->  * 1 /|   Since the renderer only handles triangles,
+        #    *   |*         *   |        * /2|   this quad must be split into two tris
+        #     *_-|           *_-|         *_-*
         # one triangle will replace the original, 
         # but the other must be appended to end of array
         # these overflow tris are accumulated and eventually appended
 
-        # initialize lists with sample data to give numba type-info
-        tri_over = [((0.0,0.0,0.0),(0.0,0.0,0.0),(0.0,0.0,0.0))]
-        uvs_over = [((0.0,0.0),(0.0,0.0),(0.0,0.0))]
-        tex_over = [1]
-        cul_over = [False]
-        # clear lists for use
-        tri_over.pop(0)
-        uvs_over.pop(0)
-        tex_over.pop(0)
-        cul_over.pop(0)
-
         # https://www.quora.com/Given-a-point-and-a-plane-how-would-you-determine-which-side-of-the-plane-the-point-lies
-        v1 = (plane[1][0]-plane[0][0], plane[1][1]-plane[0][1], plane[1][2]-plane[0][2])
-        v2 = (plane[2][0]-plane[0][0], plane[2][1]-plane[0][1], plane[2][2]-plane[0][2])
-        normal = np.cross(v1, v2)
-        n = normal+plane[0]
-        d = np.sum(normal*plane[0])
-    
-        for index, tri in enumerate(tris):
-            # filter points in tri (for ones that are outside of plane)
-            cul_pnts = tri[np.dot(tri, n) > d]
+        # https://gabrielgambetta.com/computer-graphics-from-scratch/11-clipping.html
+        for plane in planes:
+            # where overflow data is stored to later be appended
+            tri_over = []
+            uvs_over = []
+            tex_over = []
+            cul_over = []
 
-            # four cases for each tri:
-            match len(cul_pnts):
-                case 0: # no points out of bound (do nothing)
+            normal = np.cross(plane[1]-plane[0], plane[2]-plane[0])
+            d = np.sum(normal*plane[0])
+
+            for tri_idx, tri in enumerate(tris):
+                if culled_faces[tri_idx]: continue
+
+                # filter points in tri (for ones that are outside of plane)
+                cul_pnts = np.argwhere(np.dot(tri, normal) > d)
+                # four cases for each tri:
+                if (len(cul_pnts) == 0): # no points out of bound (do nothing)
                     continue
 
-                case 1: # this case leads to quadrilateral (2 tris)
-                    culled_faces[index] = True
-                    continue
+                elif (len(cul_pnts) == 1): # this case leads to quadrilateral (2 tris)
+                    new_pnts = []
+                    new_uvs = []
 
-                case 2: # only original needs to be replaced
-                    culled_faces[index] = True
-                    continue
+                    unculled = [pnt for pnt in (0, 1, 2) if pnt not in cul_pnts]
+                    p1 = tri[cul_pnts[0]][0]
+                    for pnt_idx in unculled:
+                        p2 = tri[pnt_idx]
 
-                case 3: # all points out of bound (cull)
-                    culled_faces[index] = True
-                
-            
+                        t = (np.dot(normal, plane[0]-p2) / np.dot(normal, p1-p2))
+                        new_pnts.append(p2 + t*(p1-p2))
+                        new_uvs.append(uvs[tri_idx][pnt_idx] - t*(uvs[tri_idx][pnt_idx]-uvs[tri_idx][cul_pnts[0]]))
+
+                    # modify original tri
+                    tris[tri_idx][cul_pnts[0]] = new_pnts[0]
+                    uvs[tri_idx][cul_pnts[0]] = new_uvs[0]
+
+                    # preserve winding order
+                    order = (0, 1)
+                    if (cul_pnts[0] == 1):
+                        order = order[::-1]
+
+                    new_tri = (
+                        (new_pnts[order[0]][0],new_pnts[order[0]][1],new_pnts[order[0]][2]), 
+                        (tri[unculled[-1]][0], tri[unculled[-1]][1],tri[unculled[-1]][2]),
+                        (new_pnts[order[1]][0],new_pnts[order[1]][1],new_pnts[order[1]][2]), 
+                    )
+                    new_uv = (
+                        (new_uvs[order[0]][0][0],new_uvs[order[0]][0][1]), 
+                        (uvs[tri_idx][unculled[-1]][0], uvs[tri_idx][unculled[-1]][1]),
+                        (new_uvs[order[1]][0][0],new_uvs[order[1]][0][1]), 
+                    )
+                    # append new tri
+                    tri_over.append(new_tri)
+                    uvs_over.append(new_uv)                    
+                    tex_over.append(texs[tri_idx])
+                    cul_over.append(False)
 
 
-        if (not tri_over):
-            return (tris, uvs, texs, culled_faces)
+                elif (len(cul_pnts) == 2): # only original needs to be replaced
+                    unculled = [pnt for pnt in (0, 1, 2) if pnt not in cul_pnts][0] 
+                    p1 = tri[unculled]
+                    for pnt_idx in cul_pnts:
+                        p2 = tri[pnt_idx][0]
 
-        return (
-            np.concatenate((tris        , np.asarray(tri_over, dtype=np.double))),
-            np.concatenate((uvs         , np.asarray(uvs_over, dtype=np.double))),
-            np.concatenate((texs        , np.asarray(tex_over, dtype=np.uint16))),
-            np.concatenate((culled_faces, np.asarray(cul_over, dtype=np.bool8 ))),
-        )
+                        # code adapted from https://stackoverflow.com/questions/4938332/line-plane-intersection-based-on-points
+                        t = (np.dot(normal, plane[0]-p1) / np.dot(normal, p2-p1))
+                        new_pnt = p1 + t*(p2 - p1)
+                        tris[tri_idx][pnt_idx] = new_pnt
 
-        
+                        new_uv = uvs[tri_idx][unculled] - t*(uvs[tri_idx][unculled]-uvs[tri_idx][pnt_idx])
+                        uvs[tri_idx][pnt_idx] = new_uv
+
+                else: # all points out of bound (cull)
+                    culled_faces[tri_idx] = True
+
+            if (tri_over): # append if there is overflow
+                tris, uvs, texs, culled_faces = (
+                    np.concatenate((tris        , np.asarray(tri_over, dtype=np.double))),
+                    np.concatenate((uvs         , np.asarray(uvs_over, dtype=np.double))),
+                    np.concatenate((texs        , np.asarray(tex_over, dtype=np.uint16))),
+                    np.concatenate((culled_faces, np.asarray(cul_over, dtype=np.bool8 ))),
+                )
+
+        return (tris, uvs, texs, culled_faces)
                 
     @staticmethod
     @numba.njit
@@ -348,11 +364,6 @@ class Renderer3D:
             for x in range(max(0, int(x1)), min(surf_width, int(x2))):
                 z = 1/(z1 + (x - x1)*z_slope + 1e-32) # retrive z
     
-                # if pixel trying to be rendered falls behind 
-                #   player in 3d space, don't render
-                #if (z < 1): 
-                #    continue
-                
                 # if pixel's z distance from cam is closer than previous 
                 #   value in z_buf, update z_buf and draw pixel.
                 # Otherwise, the pixel is behind another pixel (don't render)
@@ -365,7 +376,7 @@ class Renderer3D:
                 # for now, shading is determined by distance from cam (farther=darker)
                 shade = max(0, 1 - z/(20))
                 # don't render texture if uv out of bounds
-                if min(uv) >= 0 and max(uv) <= 1: 
+                if (min(uv) >= 0 and max(uv) <= 1): 
                     surfarray[x, y] = texture[int(uv[0]*tex_size[0])][int(uv[1]*tex_size[1])]*shade
     
         

@@ -8,13 +8,6 @@ from event_checker import EventChecker
 from meshes import Mesh, load_obj_file, global_texture_atlas
 """
 TODO:
-BUG:
-    <   > getting too close to meshes distorts textures
-BUG:
-    <   > projection function is wrong (incorrect points when 1+ points out of cam)
-        this is due to a lack of a clipping plane, points cannot be projected that are behind camera
-        <   > implementing this would require the renderer to handle quadrilaterals
-            <   > quads = 2 tris
 
 efficiency
     <MEH> migrate to using np arrays instead of lists
@@ -23,9 +16,14 @@ efficiency
     <   > entire rendering func njit?
     <NEW> NOTE current bottleneck is in matrix multiply function
        <   > Refactor, currently, some functions return a new array, while some modify the input
+
+    <   > when clipping against planes, determine if entire meshes are in/out
+
 texturing
     REFACTOR
-    <   > global texture atlas could be a list (so texture keys can just be ints)
+    <YES> global texture atlas could be a list (so texture keys can just be ints)
+    <   > global texture atlas could be a member of renderer
+
 mesh class?
     <MEH> implement
     <   > add support for transformations? (like rotations)
@@ -86,24 +84,30 @@ def main(use_mouse = False, debug = False):
 
     renderer = Renderer3D(screen, cam, pix_size=3)
     
-    # for i in range(15):
-    #     for j in range(15):
-    #         renderer.add_mesh(
-    #             Mesh(*load_obj_file(global_texture_atlas, "./assets/cube/cube_ccw.obj")[:-1], position=(i, 0 if j % 2 else 1, j)) # exclude last argument (textures)
-    #         )
+    #for i in range(15):
+    #    for j in range(15):
+    #        renderer.add_mesh(
+    #            Mesh(*load_obj_file(global_texture_atlas, "./assets/cube/cube_ccw.obj")[:-1], position=(i, 0 if j % 2 else 1, j)) # exclude last argument (textures)
+    #        )
 
-    renderer.add_mesh(Mesh(*load_obj_file(global_texture_atlas, "./assets/cube/cube_ccw.obj", scale=15)[:-1], position=(-5, -15, 0)))
+    for i in range(15):
+        for j in range(15):
+            renderer.add_mesh(
+                Mesh(*load_obj_file(global_texture_atlas, "./assets/cube/cube_ccw.obj", scale=5)[:-1], position=(i*5, 0 if j % 2 else 5, j*5))
+            )
+    for i in range(7):
+        renderer.add_mesh(Mesh(*load_obj_file(global_texture_atlas, "./assets/cube/cube_ccw.obj", scale=5)[:-1], position=(i*5,10,5)))
 
-    # renderer.add_mesh(
-    #     Mesh(
-    #         *load_obj_file(global_texture_atlas, "./assets/teapot/teapot.obj", scale=3),
-    #         position = [2, 3, 1.5]
-    #     )
-    # )
+    #renderer.add_mesh(Mesh(*load_obj_file(global_texture_atlas, "./assets/cube/cube_ccw.obj", scale=15)[:-1], position=(-5, -15, 0)))
 
-    # renderer.add_mesh(
-    #     Mesh(*load_obj_file(global_texture_atlas, "./assets/tri/tri.obj"))
-    # )
+    renderer.add_mesh(
+        Mesh(
+            *load_obj_file(global_texture_atlas, "./assets/teapot/teapot.obj", scale=3),
+            position = [5, 6, 7]
+        )
+    )
+
+    # renderer.add_mesh(Mesh(*load_obj_file(global_texture_atlas, "./assets/tri/tri.obj")))
 
     # renderer.add_mesh(
     #     Mesh(*load_obj_file(global_texture_atlas, "./assets/plane/plane.obj", scale=10))
@@ -113,7 +117,7 @@ def main(use_mouse = False, debug = False):
     stat_area = pygame.Surface((150, 70)) 
     stat_area.set_alpha(128)               
     stat_area.fill((0, 0, 0))
-
+    
     # on startup, display loading screen (before numba compiles functions)
     screen.blit(
         FONT.render(

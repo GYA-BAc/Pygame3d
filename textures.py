@@ -6,9 +6,9 @@ class Atlas:
     __slots__ = ['aliases', 'textures']
 
     def __init__(self, default=TEXTURE_NOT_FOUND):
-        # dict of texture names, mapped to their place in texture list
+        # dict of texture names, mapped to their index in texture list
         self.aliases : dict[str:int] = {'':0}
-        # list of actual textures; tex data stored as list indexes (int)
+        # list of actual textures; retrieve with index
         self.textures: list = [pygame.surfarray.array3d(pygame.image.load(default))]
 
     def add_tex(self, alias, texture):
@@ -20,7 +20,7 @@ class Atlas:
             self.textures.append(texture)
 
     def alias_lookup(self, alias):
-        "Convenience method to lookup texture given alias"
+        "Convenience method to lookup a texture given an alias"
         return self.textures[self.aliases[alias]]
     
     def __getitem__(self, key):

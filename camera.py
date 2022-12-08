@@ -16,8 +16,8 @@ class Camera:
         self.y_rot: float = y_rot 
 
     # public interface for internal func
-    def transform_about_cam(self, mesh: Mesh) -> list:
-        "Transform mesh about the cam to give illusion of movement, returns new array"
+    def transform_about_cam(self, mesh: Mesh) -> np.ndarray:
+        "Transform mesh about the cam to give illusion of movement, returns new array with transformed vertexes"
         return self.__transform(
             # convert to np arrays (for numba performance)
             np.asarray(self.position           , dtype=np.double), 

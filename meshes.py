@@ -24,7 +24,7 @@ class Mesh:
 		self.mesh: np.ndarray = np.asarray(mesh)
 
 		if (uv_mesh):
-			self.uv_mesh = np.asarray(uv_mesh)
+			self.uv_mesh = np.asarray((*uv_mesh,))
 		else: 
 			#default val
 			self.uv_mesh = np.asarray([
@@ -83,7 +83,6 @@ def load_obj_file(
     with open(filename, 'r') as file:
         raw = file.readlines()
 
-        # read file
         mtllibs = []
 
         vertexes = []
@@ -93,6 +92,7 @@ def load_obj_file(
         uv_faces = []
         textures = []
         
+        # read file
         for line in raw:
             if (line[:6] == 'mtllib'):
                 mtllibs.append(f"./{line.split()[1]}")
