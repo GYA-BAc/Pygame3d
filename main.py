@@ -9,19 +9,21 @@ from meshes import Mesh, load_obj_file, global_texture_atlas
 """
 TODO:
 
-BUG ???
-    pygame.set_grab() doesn't seem to work on my machine.
-    this makes use_mouse mode not work
-
 efficiency
-    <MEH> backface culling
-        <NEW> BUG culls triangles that are on screen
     <MEH> migrate to using np arrays instead of lists
         <   > reduce unnecessary transformations (from list to array, vice versa)
     <2  > more njit funcs?
     <   > entire rendering func njit?
+    <NEW> NOTE current bottleneck is in matrix multiply function
+       <   > Refactor, currently, some functions return a new array, while some modify the input
+
+    <   > when clipping against planes, determine if entire meshes are in/out
+
 texturing
     REFACTOR
+    <YES> global texture atlas could be a list (so texture keys can just be ints)
+    <   > global texture atlas could be a member of renderer
+
 mesh class?
     <MEH> implement
     <   > add support for transformations? (like rotations)
@@ -31,7 +33,7 @@ mesh class?
     
     <MEH> .obj file support?
         <   > Trianglify obj files (all faces must have 3 vertexes)
-        <NEW> counterclockwise-ify all 
+        <MEH> counterclockwise-ify all 
         <MEH> Texture Uvs
         <   > REFACTOR, use new pathlib module?
            <   > refactor loading code (rn it reads through the file 3 times)
@@ -47,19 +49,21 @@ HEIGHT = 600
 
 FPS = 80
 
-# per second
-SPEED = 2.5 
+# camera settings
+SPEED = 4 #per second
 ROT_SPEED = 90 # (in degrees)
 
 FONT = pygame.font.Font(pygame.font.get_default_font(), 15)
 
 def main(use_mouse = False, debug = False):
     pygame.init()
+
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+
     if (use_mouse):
         pygame.mouse.set_visible(False)
         pygame.event.set_grab(True)
 
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
     event_checker = EventChecker(
         {
             'quit'     : {pygame.K_ESCAPE},
@@ -80,25 +84,40 @@ def main(use_mouse = False, debug = False):
 
     renderer = Renderer3D(screen, cam, pix_size=3)
     
-    renderer.add_mesh(
-        Mesh(*load_obj_file(global_texture_atlas, "./assets/cube/cube_ccw.obj")[:-1]) # exclude last argument (textures)
-    )
+    #for i in range(15):
+    #    for j in range(15):
+    #        renderer.add_mesh(
+    #            Mesh(*load_obj_file(global_texture_atlas, "./assets/cube/cube_ccw.obj")[:-1], position=(i, 0 if j % 2 else 1, j)) # exclude last argument (textures)
+    #        )
+
+    for i in range(15):
+        for j in range(15):
+            renderer.add_mesh(
+                Mesh(*load_obj_file(global_texture_atlas, "./assets/cube/cube_ccw.obj", scale=5)[:-1], position=(i*5, 0 if j % 2 else 5, j*5))
+            )
+    for i in range(7):
+        renderer.add_mesh(Mesh(*load_obj_file(global_texture_atlas, "./assets/cube/cube_ccw.obj", scale=5)[:-1], position=(i*5,10,5)))
+
+    #renderer.add_mesh(Mesh(*load_obj_file(global_texture_atlas, "./assets/cube/cube_ccw.obj", scale=15)[:-1], position=(-5, -15, 0)))
+
     renderer.add_mesh(
         Mesh(
             *load_obj_file(global_texture_atlas, "./assets/teapot/teapot.obj", scale=3),
-            position = [2, 0, 1.5]
+            position = [5, 6, 7]
         )
     )
-    # renderer.add_mesh(
-    #     Mesh(*load_obj_file(global_texture_atlas, "./assets/tri/tri.obj"))
-    # )
 
+    # renderer.add_mesh(Mesh(*load_obj_file(global_texture_atlas, "./assets/tri/tri.obj")))
+
+    # renderer.add_mesh(
+    #     Mesh(*load_obj_file(global_texture_atlas, "./assets/plane/plane.obj", scale=10))
+    # )
 
     # a transparent rectangle to put text on
     stat_area = pygame.Surface((150, 70)) 
     stat_area.set_alpha(128)               
     stat_area.fill((0, 0, 0))
-
+    
     # on startup, display loading screen (before numba compiles functions)
     screen.blit(
         FONT.render(
@@ -114,6 +133,7 @@ def main(use_mouse = False, debug = False):
     while (run):
         #mesh.position[0] += .005
         
+        # how much time has passed since last frame
         delta_time = clock.tick(FPS)/1000
 
         event_checker.check_key_press()
@@ -121,6 +141,8 @@ def main(use_mouse = False, debug = False):
             run = False
         
         if event_checker.get_state('forward'):
+            # multiply speed by time elapsed to account for 
+            #   uneven framerate (same speed, regardless of FPS)
             cam.translate_cam((0, 0, SPEED*delta_time))
         if event_checker.get_state('backward'):
             cam.translate_cam((0, 0, -SPEED*delta_time))
@@ -168,10 +190,10 @@ def main(use_mouse = False, debug = False):
             # display transparent rect as bg of stats        
             screen.blit(stat_area, (5,5))
             # display FPS
-            screen.blit(FONT.render(f"{clock.get_fps():.1f} FPS", True, (255, 255, 255), None), (10, 10))
+            screen.blit(FONT.render(f"FPS {clock.get_fps():.1f}", True, (255, 255, 255), None), (10, 10))
             # display pos and rot
             screen.blit(FONT.render(
-                f"{cam.position[0]:.1f}, {cam.position[1]:.1f}, {cam.position[2]:.1f} POS", 
+                f"POS {cam.position[0]:.1f}, {cam.position[1]:.1f}, {cam.position[2]:.1f}", 
                 True, (255, 255, 255), None), (10, 30)
             )
             screen.blit(FONT.render(
@@ -188,7 +210,9 @@ if __name__ == "__main__":
             use_mouse = False,
             debug     = True
         )
+    except Exception as e:
+        print(e)
     finally:
-    # after main function stops running, (whether by normal exit or error)
-    #   ensure pygame quits correctly
+        # after main function stops running, (whether by normal exit or error)
+        #   ensure pygame quits correctly
         pygame.quit()

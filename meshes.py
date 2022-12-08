@@ -3,12 +3,10 @@ import numpy as np
 import os
 from typing import Optional
 
-TEXTURE_NOT_FOUND = "./assets/Missing.png"
+from textures import Atlas
 
 # this is a global variable, perhaps remove later
-global_texture_atlas = {
-	'' : pygame.surfarray.array3d(pygame.image.load(TEXTURE_NOT_FOUND))
-}
+global_texture_atlas = Atlas()
 
 class Mesh:
 
@@ -26,7 +24,7 @@ class Mesh:
 		self.mesh: np.ndarray = np.asarray(mesh)
 
 		if (uv_mesh):
-			self.uv_mesh = np.asarray(uv_mesh)
+			self.uv_mesh = np.asarray((*uv_mesh,))
 		else: 
 			#default val
 			self.uv_mesh = np.asarray([
@@ -39,23 +37,23 @@ class Mesh:
 		if (textures):
 			self.textures = textures
 		else:
-			self.textures = ['' for _ in self.mesh]
+			self.textures = [0 for _ in self.mesh]
 
 		self.position: list[float] = [position[0], position[1], position[2]]
 
 
 # NOTE: use triangulated obj files (3 vertex face elements)
 def load_obj_file(
-    atlas:    dict[str: np.ndarray], 
+    atlas:    Atlas, 
     filepath: str, 
     scale:    Optional[float] = 0
 )   ->        tuple:
     """
     Load an obj file, given the filepath of said object
     
-    atlas:      dict {"texture name" : np.ndarray[texture data]}
+    atlas:      Alias object
         all loaded textures are stored here
-        texturedata in meshes refer to keys in atlas
+        texturedata in meshes refer to indexes in atlas
     filepath:   str
     scale:      float, None
         The max size of any one face. Largest face becomes scale value. \n
@@ -65,8 +63,7 @@ def load_obj_file(
     returns:    tuple
         element 1: list of faces
         element 2: list of uv coordinates corresponding to faces
-        element 3: list of texture names (global atlas keys), 
-            also corresponding to faces
+        element 3: list of face texture indexes (corresponding to Atlas object), 
 
     Note that if object file is missing a texture, a default will be provided\n
     Similarly, if object file is missing uv coords, a default will be provided
@@ -86,7 +83,6 @@ def load_obj_file(
     with open(filename, 'r') as file:
         raw = file.readlines()
 
-        # read file
         mtllibs = []
 
         vertexes = []
@@ -96,6 +92,7 @@ def load_obj_file(
         uv_faces = []
         textures = []
         
+        # read file
         for line in raw:
             if (line[:6] == 'mtllib'):
                 mtllibs.append(f"./{line.split()[1]}")
@@ -116,8 +113,9 @@ def load_obj_file(
                     elif (line.strip()[:6] == 'map_Kd'):
                         mtl_path = line.split()[1]
                         if (curr_mtl not in atlas):
-                            atlas[curr_mtl] = pygame.surfarray.array3d(
-                                pygame.image.load(f"./{mtl_path}")
+                            atlas.add_tex(
+                                curr_mtl,
+                                pygame.surfarray.array3d(pygame.image.load(f"./{mtl_path}"))
                             )
                         curr_mtl = ""
 
@@ -167,7 +165,7 @@ def load_obj_file(
                         uv_coords[int(uv_indexes[2])-1],
                     ))
 
-                textures.append(curr_mtl)
+                textures.append(atlas[curr_mtl] if curr_mtl in atlas else 0)
 
     os.chdir(prev_dir)
 
