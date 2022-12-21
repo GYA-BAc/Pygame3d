@@ -24,6 +24,7 @@ class Renderer3D:
 
     __MAX_Z = 1000
     __OFFSET_Z = .1
+    # honestly, FOV_RAD doesn't make any sense to me
     __FOV_RAD = 360
 
     def __init__(self, surface: pygame.surface.Surface, cam: Camera, pix_size: int = 1):
@@ -41,7 +42,17 @@ class Renderer3D:
         # a plane is just 3 points (ccw faces towards cam)
         self.__CLIPPING_PLANES = np.asarray((
             ((0, 0, self.__OFFSET_Z*10+1), (1, 1, self.__OFFSET_Z*10+1), (1, 0 , self.__OFFSET_Z*10+1)), # front facing
-            # ((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 1.0, 1.0)),
+            #((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 1.0, 1.0)), #cut screen in half
+            # hardcoded camera limits for pix_size = 3
+                # east 
+            ((0, 0, 0), (self.__WIDTH/200, self.__HEIGHT/200, self.__OFFSET_Z*10+pix_size*3), (self.__WIDTH/200, -self.__HEIGHT/200, self.__OFFSET_Z*10+pix_size*3)),
+                # west
+            ((0, 0, 0), (-self.__WIDTH/200, -self.__HEIGHT/200, self.__OFFSET_Z*10+pix_size*3), (-self.__WIDTH/200, self.__HEIGHT/200, self.__OFFSET_Z*10+pix_size*3)),
+                # north
+            ((0, 0, 0), (-self.__WIDTH/200, self.__HEIGHT/200, self.__OFFSET_Z*10+pix_size*3), (self.__WIDTH/200, self.__HEIGHT/200, self.__OFFSET_Z*10+pix_size*3)),
+                # south
+            ((0, 0, 0), (self.__WIDTH/200, -self.__HEIGHT/200, self.__OFFSET_Z*10+pix_size*3), (-self.__WIDTH/200, -self.__HEIGHT/200, self.__OFFSET_Z*10+pix_size*3)),
+
         ), dtype=np.double)
 
         self.cam: Camera = cam
@@ -181,9 +192,9 @@ class Renderer3D:
 
             for tri_idx, tri in enumerate(tris):
                 if culled_faces[tri_idx]: continue
-
+                
                 # filter points in tri (for ones that are outside of plane)
-                cul_pnts = np.argwhere(np.dot(tri, normal) > d)
+                cul_pnts = np.argwhere(np.dot(tris[tri_idx], normal) > d)
                 # four cases for each tri:
                 if (len(cul_pnts) == 0): # no points out of bound (do nothing)
                     continue

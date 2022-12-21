@@ -14,15 +14,14 @@ efficiency
         <   > reduce unnecessary transformations (from list to array, vice versa)
     <2  > more njit funcs?
     <   > entire rendering func njit?
-    <NEW> NOTE current bottleneck is in matrix multiply function
        <   > Refactor, currently, some functions return a new array, while some modify the input
 
     <   > when clipping against planes, determine if entire meshes are in/out
 
 texturing
     REFACTOR
-    <YES> global texture atlas could be a list (so texture keys can just be ints)
     <   > global texture atlas could be a member of renderer
+    <   > camera class should have some of renderer's responsibility? (projecting tri, culling, clipping)
 
 mesh class?
     <MEH> implement
@@ -35,12 +34,16 @@ mesh class?
         <   > Trianglify obj files (all faces must have 3 vertexes)
         <MEH> counterclockwise-ify all 
         <MEH> Texture Uvs
-        <   > REFACTOR, use new pathlib module?
-           <   > refactor loading code (rn it reads through the file 3 times)
+        <   > upgrade to python 3.11 (check if dependencies work)
+           <   > use new pathlib module
+
+        <   > refactor loading code (rn it reads through the file 3 times)
 
 lighting
     ray tracing?
     fragment shading?
+    <   > lighting data stored and calculated seperately per triangle?
+       <   > seperate function from rendering function, data is passed into render func
 
 """
 
@@ -61,6 +64,7 @@ def main(use_mouse = False, debug = False):
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
     if (use_mouse):
+        # these statements must come after screen initialization w/ display.set_mode()
         pygame.mouse.set_visible(False)
         pygame.event.set_grab(True)
 
@@ -131,6 +135,7 @@ def main(use_mouse = False, debug = False):
 
     run = True
     while (run):
+        # print(renderer.z_buffer[100, 100])
         #mesh.position[0] += .005
         
         # how much time has passed since last frame
@@ -140,6 +145,13 @@ def main(use_mouse = False, debug = False):
         if event_checker.get_state('quit'):
             run = False
         
+        # mouse cam movement
+        if (use_mouse):
+            if (pygame.mouse.get_focused()):
+                mouse_trav = pygame.mouse.get_rel()
+                cam.rotate_cam(mouse_trav[0]//10, 0)
+                cam.rotate_cam(0, -mouse_trav[1]//10)
+
         if event_checker.get_state('forward'):
             # multiply speed by time elapsed to account for 
             #   uneven framerate (same speed, regardless of FPS)
@@ -157,13 +169,6 @@ def main(use_mouse = False, debug = False):
         if event_checker.get_state('up'):
             cam.translate_cam((0, SPEED*delta_time, 0))
         
-        # mouse cam movement
-        if (use_mouse):
-            if (pygame.mouse.get_focused()):
-                mouse_trav = pygame.mouse.get_rel()
-                cam.rotate_cam(mouse_trav[0]//10, 0)
-                cam.rotate_cam(0, -mouse_trav[1]//10)
-            
         if event_checker.get_state('rot_left'):
             cam.rotate_cam(-ROT_SPEED*delta_time, 0)
         if event_checker.get_state('rot_right'):
@@ -207,7 +212,7 @@ def main(use_mouse = False, debug = False):
 if __name__ == "__main__":
     try:
         main(
-            use_mouse = False,
+            use_mouse = True,
             debug     = True
         )
     except Exception as e:

@@ -54,4 +54,6 @@ main.py contains:
           - https://en.wikipedia.org/wiki/Wavefront_.obj_file#Vertex_texture_coordinate_indices
           - https://www.cs.cmu.edu/~mbz/personal/graphics/obj.html 
 
+    - misc 
+      - https://www.scratchapixel.com
 

@@ -1,6 +1,5 @@
 import pygame
 import numpy as np
-import os
 from typing import Optional
 
 from textures import Atlas
@@ -42,6 +41,22 @@ class Mesh:
 		self.position: list[float] = [position[0], position[1], position[2]]
 
 
+# class ExperimentalPointLight:
+#     """Note: this light acts more light an 'aura', increasing brightness near location, regardless of objects in the way"""
+# 
+#     def __init__(self, radius, position=(0, 0, 0)):
+#         
+#         # max radius that the light will effect (will diminish until completely fading at radius)
+#         self.radius = radius
+#         self.position = [position[0], position[1], position[2]]
+# 
+# 
+# from camera import Camera
+# class ExperimentalDirectionalLight(Camera):
+# 
+#     def __init__(self):
+#         ...
+
 # NOTE: use triangulated obj files (3 vertex face elements)
 def load_obj_file(
     atlas:    Atlas, 
@@ -77,10 +92,7 @@ def load_obj_file(
     dirpath = '/'.join(info[:-1]) + '/'
     filename = info[-1]
 
-    prev_dir = os.getcwd()
-    os.chdir(dirpath)
-
-    with open(filename, 'r') as file:
+    with open(dirpath+filename, 'r') as file:
         raw = file.readlines()
 
         mtllibs = []
@@ -100,7 +112,7 @@ def load_obj_file(
         # load all materials
         for lib in mtllibs:
 
-            with open(lib) as libfile: 
+            with open(dirpath+lib) as libfile: 
                 rawlib = libfile.readlines()
 
                 curr_mtl = ""
@@ -115,7 +127,7 @@ def load_obj_file(
                         if (curr_mtl not in atlas):
                             atlas.add_tex(
                                 curr_mtl,
-                                pygame.surfarray.array3d(pygame.image.load(f"./{mtl_path}"))
+                                pygame.surfarray.array3d(pygame.image.load(f"{dirpath}{mtl_path}"))
                             )
                         curr_mtl = ""
 
@@ -166,8 +178,6 @@ def load_obj_file(
                     ))
 
                 textures.append(atlas[curr_mtl] if curr_mtl in atlas else 0)
-
-    os.chdir(prev_dir)
 
     return (faces, uv_faces, textures)
 
