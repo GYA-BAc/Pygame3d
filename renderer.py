@@ -7,14 +7,11 @@ from meshes import Mesh, global_texture_atlas
 
 
 class Renderer3D:
-    """Class which renders 3d meshes to a 2d surface, from a given viewpoint"""
+    """Class which renders 3d meshes to a 2d surface, from a given camera"""
 
     __slots__ = [
-        '__WIDTH', 
-        '__HEIGHT', 
-        '__ASPECT_RATIO', 
-        '__PROJ', 
-        '__CLIPPING_PLANES',
+        'WIDTH', 
+        'HEIGHT', 
         'cam', 
         'pix_size',
         'surface', 
@@ -22,50 +19,22 @@ class Renderer3D:
         'meshes',
     ]
 
-    __MAX_Z = 1000
-    __OFFSET_Z = .1
-    # honestly, FOV_RAD doesn't make any sense to me
-    __FOV_RAD = 360
+    MAX_Z = 1000
 
-    def __init__(self, surface: pygame.surface.Surface, cam: Camera, pix_size: int = 1):
+    def __init__(self, surface: pygame.surface.Surface, cam: Camera):
 
         # define constants
-        self.__WIDTH, self.__HEIGHT = surface.get_size()
-        self.__ASPECT_RATIO = self.__HEIGHT/self.__WIDTH
-        self.__PROJ = np.asarray((
-            (self.__ASPECT_RATIO * self.__FOV_RAD, 0, 0, 0),
-            (0, self.__FOV_RAD, 0, 0), 
-            (0, 0, self.__MAX_Z / (self.__MAX_Z - self.__OFFSET_Z), 1), 
-            (0, 0, (-self.__MAX_Z * self.__OFFSET_Z) / (self.__MAX_Z - self.__OFFSET_Z), 0),
-        ), dtype=np.double)
-
-        # a plane is just 3 points (ccw faces towards cam)
-        self.__CLIPPING_PLANES = np.asarray((
-            ((0, 0, self.__OFFSET_Z*10+1), (1, 1, self.__OFFSET_Z*10+1), (1, 0 , self.__OFFSET_Z*10+1)), # front facing
-            #((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 1.0, 1.0)), #cut screen in half
-            # hardcoded camera limits for pix_size = 3
-                # east 
-            ((0, 0, 0), (self.__WIDTH/200, self.__HEIGHT/200, self.__OFFSET_Z*10+pix_size*3), (self.__WIDTH/200, -self.__HEIGHT/200, self.__OFFSET_Z*10+pix_size*3)),
-                # west
-            ((0, 0, 0), (-self.__WIDTH/200, -self.__HEIGHT/200, self.__OFFSET_Z*10+pix_size*3), (-self.__WIDTH/200, self.__HEIGHT/200, self.__OFFSET_Z*10+pix_size*3)),
-                # north
-            ((0, 0, 0), (-self.__WIDTH/200, self.__HEIGHT/200, self.__OFFSET_Z*10+pix_size*3), (self.__WIDTH/200, self.__HEIGHT/200, self.__OFFSET_Z*10+pix_size*3)),
-                # south
-            ((0, 0, 0), (self.__WIDTH/200, -self.__HEIGHT/200, self.__OFFSET_Z*10+pix_size*3), (-self.__WIDTH/200, -self.__HEIGHT/200, self.__OFFSET_Z*10+pix_size*3)),
-
-        ), dtype=np.double)
+        self.WIDTH, self.HEIGHT = surface.get_size()
 
         self.cam: Camera = cam
-        self.pix_size: int = int(pix_size)
-        if (pix_size < 1):
-            raise ValueError("pix_size cannot be smaller than native screen resolution (1)")
+        self.pix_size = self.cam.PIX_SIZE
         
         # define instance variables that will change
 
         self.surface: pygame.surface.Surface = surface
         self.z_buffer: np.ndarray = np.full(
-            (self.__WIDTH//self.pix_size, self.__HEIGHT//self.pix_size),
-            self.__MAX_Z
+            (self.WIDTH//self.pix_size, self.HEIGHT//self.pix_size),
+            self.MAX_Z
         ).astype('d') # array of doubles
 
         self.meshes: list[Mesh] = []
@@ -84,15 +53,15 @@ class Renderer3D:
         #    also clears screen
         #    also scale down to account for pix_size
         surface = np.full(
-            (self.__WIDTH//self.pix_size, self.__HEIGHT//self.pix_size, 3), 
+            (self.WIDTH//self.pix_size, self.HEIGHT//self.pix_size, 3), 
             fill_value=(120, 170, 210), # Background RGB
             dtype=np.uint8
         )
         
         # clear z buffer
         self.z_buffer = np.full(
-            (self.__WIDTH//self.pix_size, self.__HEIGHT//self.pix_size),
-            self.__MAX_Z,
+            (self.WIDTH//self.pix_size, self.HEIGHT//self.pix_size),
+            self.MAX_Z,
             dtype=np.double
         )
         # flatten all meshes into array of tris
@@ -105,12 +74,11 @@ class Renderer3D:
         # array of bools, indicating whether the corresponding face should be culled
         culled_faces = np.full((len(triangles)), False, np.bool8)
 
-        triangles, uv_coords, textures, culled_faces = self.__get_clipped(
-                triangles, uv_coords, textures, culled_faces, self.__CLIPPING_PLANES,
+        triangles, uv_coords, textures, culled_faces = self.cam.get_visible_triangles(
+            triangles, uv_coords, textures, culled_faces
         )
-        
-        self.__get_backfaces(triangles, culled_faces)
-        self.__project_triangles(triangles, self.__PROJ)
+
+        self.cam.project_triangles(triangles)
 
         #numrendered = 0 #
         for index, tri in enumerate(triangles):
@@ -130,164 +98,12 @@ class Renderer3D:
         surf = pygame.surfarray.make_surface(surface)
         # pygame.draw.circle(surf, (255, 0 ,0), [triangles[1][2][0]+self.__WIDTH//2//self.pix_size, self.__HEIGHT//2//self.pix_size-triangles[1][2][1]], 15)
         # scale back to surface size
-        surf = pygame.transform.scale(surf, (self.__WIDTH, self.__HEIGHT))
+        surf = pygame.transform.scale(surf, (self.WIDTH, self.HEIGHT))
         self.surface.blit(surf, (0, 0)) 
         # print(numrendered) #
 
-    # njit increases performance ten-fold 
-    #   but doesn't work well with the 'self' argument 
-    # Therefore, use staticmethods
-    @staticmethod
-    @numba.njit
-    def __get_backfaces(faces: np.ndarray, culled_buffer: np.ndarray) -> None:
-        """Determine if a face is a backface. Write results into provided buffer
-        Note: winding order of faces must be CCW."""
-        # credits to http://www.dgp.toronto.edu/~karan/courses/csc418/fall_2002/notes/cull.html
+    
 
-        for index, tri in enumerate(faces):
-            normal = np.cross(tri[1]-tri[0], tri[2]-tri[0])
-            
-            if (not culled_buffer[index]):
-                culled_buffer[index] = np.sum(normal*tri[0]) < 0
-
-    @staticmethod
-    @numba.njit
-    def __get_clipped(tris, uvs, texs, culled_faces, planes) -> tuple:
-        """
-        Clip triangles against given plane. \n
-        Args:
-            tris         : triangles to be clipped
-            uvs          : tris corresponding uv coords
-            texs         : tris corresponding textures
-            culled_faces : array of bool, denoting whether corresponding face is culled
-                provide tris length array filled with false if none are culled
-            plane        : array representing a plane, denoted by 3 points (order matters)
-        Returns: 
-            tuple:
-                A tuple of results, element 1 being the new array of tris, 2 new uvs, etc.
-                Note that original arrays are scrambled as a side-effect (incorrect) 
-        """
-        # triangle clipping sometimes results in a triangle becoming a quadrilateral
-        #   ex:
-        #        clipping across this line results in quadrilateral
-        #  * - _ |        * - _ |      * - _     
-        #   *    | *  -->  *    |  -->  * 1 /|   Since the renderer only handles triangles,
-        #    *   |*         *   |        * /2|   this quad must be split into two tris
-        #     *_-|           *_-|         *_-*
-        # one triangle will replace the original, 
-        # but the other must be appended to end of array
-        # these overflow tris are accumulated and eventually appended
-
-        # https://www.quora.com/Given-a-point-and-a-plane-how-would-you-determine-which-side-of-the-plane-the-point-lies
-        # https://gabrielgambetta.com/computer-graphics-from-scratch/11-clipping.html
-        for plane in planes:
-            # where overflow data is stored to later be appended
-            tri_over = []
-            uvs_over = []
-            tex_over = []
-            cul_over = []
-
-            normal = np.cross(plane[1]-plane[0], plane[2]-plane[0])
-            d = np.sum(normal*plane[0])
-
-            for tri_idx, tri in enumerate(tris):
-                if culled_faces[tri_idx]: continue
-                
-                # filter points in tri (for ones that are outside of plane)
-                cul_pnts = np.argwhere(np.dot(tris[tri_idx], normal) > d)
-                # four cases for each tri:
-                if (len(cul_pnts) == 0): # no points out of bound (do nothing)
-                    continue
-
-                elif (len(cul_pnts) == 1): # this case leads to quadrilateral (2 tris)
-                    new_pnts = []
-                    new_uvs = []
-
-                    unculled = [pnt for pnt in (0, 1, 2) if pnt not in cul_pnts]
-                    p1 = tri[cul_pnts[0]][0]
-                    for pnt_idx in unculled:
-                        p2 = tri[pnt_idx]
-
-                        t = (np.dot(normal, plane[0]-p2) / np.dot(normal, p1-p2))
-                        new_pnts.append(p2 + t*(p1-p2))
-                        new_uvs.append(uvs[tri_idx][pnt_idx] - t*(uvs[tri_idx][pnt_idx]-uvs[tri_idx][cul_pnts[0]]))
-
-                    # modify original tri
-                    tris[tri_idx][cul_pnts[0]] = new_pnts[0]
-                    uvs[tri_idx][cul_pnts[0]] = new_uvs[0]
-
-                    # preserve winding order
-                    order = (0, 1)
-                    if (cul_pnts[0] == 1):
-                        order = order[::-1]
-
-                    new_tri = (
-                        (new_pnts[order[0]][0],new_pnts[order[0]][1],new_pnts[order[0]][2]), 
-                        (tri[unculled[-1]][0], tri[unculled[-1]][1],tri[unculled[-1]][2]),
-                        (new_pnts[order[1]][0],new_pnts[order[1]][1],new_pnts[order[1]][2]), 
-                    )
-                    new_uv = (
-                        (new_uvs[order[0]][0][0],new_uvs[order[0]][0][1]), 
-                        (uvs[tri_idx][unculled[-1]][0], uvs[tri_idx][unculled[-1]][1]),
-                        (new_uvs[order[1]][0][0],new_uvs[order[1]][0][1]), 
-                    )
-                    # append new tri
-                    tri_over.append(new_tri)
-                    uvs_over.append(new_uv)                    
-                    tex_over.append(texs[tri_idx])
-                    cul_over.append(False)
-
-
-                elif (len(cul_pnts) == 2): # only original needs to be replaced
-                    unculled = [pnt for pnt in (0, 1, 2) if pnt not in cul_pnts][0] 
-                    p1 = tri[unculled]
-                    for pnt_idx in cul_pnts:
-                        p2 = tri[pnt_idx][0]
-
-                        # code adapted from https://stackoverflow.com/questions/4938332/line-plane-intersection-based-on-points
-                        t = (np.dot(normal, plane[0]-p1) / np.dot(normal, p2-p1))
-                        new_pnt = p1 + t*(p2 - p1)
-                        tris[tri_idx][pnt_idx] = new_pnt
-
-                        new_uv = uvs[tri_idx][unculled] - t*(uvs[tri_idx][unculled]-uvs[tri_idx][pnt_idx])
-                        uvs[tri_idx][pnt_idx] = new_uv
-
-                else: # all points out of bound (cull)
-                    culled_faces[tri_idx] = True
-
-            if (tri_over): # append if there is overflow
-                tris, uvs, texs, culled_faces = (
-                    np.concatenate((tris        , np.asarray(tri_over, dtype=np.double))),
-                    np.concatenate((uvs         , np.asarray(uvs_over, dtype=np.double))),
-                    np.concatenate((texs        , np.asarray(tex_over, dtype=np.uint16))),
-                    np.concatenate((culled_faces, np.asarray(cul_over, dtype=np.bool8 ))),
-                )
-
-        return (tris, uvs, texs, culled_faces)
-                
-    @staticmethod
-    @numba.njit
-    def __project_triangles(tris, proj_mat) -> None:
-        
-        for tri_idx, tri in enumerate(tris):
-            for pnt_idx, point in enumerate(tri):
-
-                # output = [
-                #     mat1[0]*mat2[0][0] + mat1[1]*mat2[1][0] + mat1[2]*mat2[2][0] + mat2[3][0],
-                #     mat1[0]*mat2[0][1] + mat1[1]*mat2[1][1] + mat1[2]*mat2[2][1] + mat2[3][1],
-                #     mat1[0]*mat2[0][2] + mat1[1]*mat2[1][2] + mat1[2]*mat2[2][2] + mat2[3][2],
-                # ] #this is equivalent np.dot
-
-                # note that dot product must be with two similarly shaped arrays, hence the addition of 1
-                output = np.dot(np.asarray([*point, 1]), proj_mat) 
-                w = point[0]*proj_mat[0][3] + point[1]*proj_mat[1][3] + point[2]*proj_mat[2][3] + proj_mat[3][3]
-
-                if w:
-                    output[0] /= w; output[1] /= w
-
-                tris[tri_idx][pnt_idx][0] = output[0]
-                tris[tri_idx][pnt_idx][1] = output[1]
-                tris[tri_idx][pnt_idx][2] = output[2]
 
     @staticmethod
     @numba.njit()

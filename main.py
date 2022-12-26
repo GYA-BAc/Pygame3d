@@ -22,6 +22,7 @@ texturing
     REFACTOR
     <   > global texture atlas could be a member of renderer
     <   > camera class should have some of renderer's responsibility? (projecting tri, culling, clipping)
+    <   > transforming objects about a camera use dot product? (david)
 
 mesh class?
     <MEH> implement
@@ -84,9 +85,9 @@ def main(use_mouse = False, debug = False):
         }
     )
     clock = pygame.time.Clock()
-    cam = Camera(position=(0, 0, -4))
 
-    renderer = Renderer3D(screen, cam, pix_size=3)
+    cam = Camera((WIDTH, HEIGHT), pix_size=3, init_pos=[0, 0, -4])
+    renderer = Renderer3D(screen, cam)
     
     #for i in range(15):
     #    for j in range(15):
@@ -135,7 +136,7 @@ def main(use_mouse = False, debug = False):
 
     run = True
     while (run):
-        # print(renderer.z_buffer[100, 100])
+        #print(renderer.z_buffer[100, 100])
         #mesh.position[0] += .005
         
         # how much time has passed since last frame
@@ -149,45 +150,45 @@ def main(use_mouse = False, debug = False):
         if (use_mouse):
             if (pygame.mouse.get_focused()):
                 mouse_trav = pygame.mouse.get_rel()
-                cam.rotate_cam(mouse_trav[0]//10, 0)
-                cam.rotate_cam(0, -mouse_trav[1]//10)
+                renderer.cam.rotate_cam(mouse_trav[0]//10, 0)
+                renderer.cam.rotate_cam(0, -mouse_trav[1]//10)
 
         if event_checker.get_state('forward'):
             # multiply speed by time elapsed to account for 
             #   uneven framerate (same speed, regardless of FPS)
-            cam.translate_cam((0, 0, SPEED*delta_time))
+            renderer.cam.translate_cam((0, 0, SPEED*delta_time))
         if event_checker.get_state('backward'):
-            cam.translate_cam((0, 0, -SPEED*delta_time))
+            renderer.cam.translate_cam((0, 0, -SPEED*delta_time))
             
         if event_checker.get_state('left'):
-            cam.translate_cam((-SPEED*delta_time, 0, 0))
+            renderer.cam.translate_cam((-SPEED*delta_time, 0, 0))
         if event_checker.get_state('right'):
-            cam.translate_cam((SPEED*delta_time, 0, 0))
+            renderer.cam.translate_cam((SPEED*delta_time, 0, 0))
 
         if event_checker.get_state('down'):
-            cam.translate_cam((0, -SPEED*delta_time, 0))
+            renderer.cam.translate_cam((0, -SPEED*delta_time, 0))
         if event_checker.get_state('up'):
-            cam.translate_cam((0, SPEED*delta_time, 0))
+            renderer.cam.translate_cam((0, SPEED*delta_time, 0))
         
         if event_checker.get_state('rot_left'):
-            cam.rotate_cam(-ROT_SPEED*delta_time, 0)
+            renderer.cam.rotate_cam(-ROT_SPEED*delta_time, 0)
         if event_checker.get_state('rot_right'):
-            cam.rotate_cam(ROT_SPEED*delta_time, 0)
+            renderer.cam.rotate_cam(ROT_SPEED*delta_time, 0)
         
         if event_checker.get_state('rot_down'):
-            cam.rotate_cam(0, -ROT_SPEED*delta_time)
+            renderer.cam.rotate_cam(0, -ROT_SPEED*delta_time)
         if event_checker.get_state('rot_up'):
-            cam.rotate_cam(0, ROT_SPEED*delta_time)
+            renderer.cam.rotate_cam(0, ROT_SPEED*delta_time)
         
         # cam limits
-        if (cam.x_rot < 0):
-            cam.x_rot = 360
-        if (cam.x_rot > 360):
-            cam.x_rot = 0
-        if (cam.y_rot < -90):
-            cam.y_rot = -90
-        if (cam.y_rot > 90):
-            cam.y_rot = 90
+        if (renderer.cam.x_rot < 0):
+            renderer.cam.x_rot = 360
+        if (renderer.cam.x_rot > 360):
+            renderer.cam.x_rot = 0
+        if (renderer.cam.y_rot < -90):
+            renderer.cam.y_rot = -90
+        if (renderer.cam.y_rot > 90):
+            renderer.cam.y_rot = 90
 
         renderer.render_all()
 
@@ -198,11 +199,11 @@ def main(use_mouse = False, debug = False):
             screen.blit(FONT.render(f"FPS {clock.get_fps():.1f}", True, (255, 255, 255), None), (10, 10))
             # display pos and rot
             screen.blit(FONT.render(
-                f"POS {cam.position[0]:.1f}, {cam.position[1]:.1f}, {cam.position[2]:.1f}", 
+                f"POS {renderer.cam.position[0]:.1f}, {renderer.cam.position[1]:.1f}, {renderer.cam.position[2]:.1f}", 
                 True, (255, 255, 255), None), (10, 30)
             )
             screen.blit(FONT.render(
-                f"X: {int(cam.x_rot)}, Y: {int(cam.y_rot)} DEG", 
+                f"X: {int(renderer.cam.x_rot)}, Y: {int(renderer.cam.y_rot)} DEG", 
                 True, (255, 255, 255), None), (10, 50)
             )
 
@@ -212,7 +213,7 @@ def main(use_mouse = False, debug = False):
 if __name__ == "__main__":
     try:
         main(
-            use_mouse = True,
+            use_mouse = False,
             debug     = True
         )
     except Exception as e:
