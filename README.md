@@ -1,7 +1,10 @@
 # A 3d renderer made in python, using pygame
 
 a project started in August 2022, by Alan Ji
-  Huge thanks to David for his support and help throughout
+
+Huge thanks to David for his support and help throughout
+
+![image](https://user-images.githubusercontent.com/97851399/210925347-4b28f6fe-eb5a-4064-8c90-91120bf329c1.png)
 
 Works with counter-clockwise, triangulated meshes
 
