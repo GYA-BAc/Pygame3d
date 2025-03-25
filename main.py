@@ -82,7 +82,7 @@ def main(use_mouse = False, debug = False):
     clock = pygame.time.Clock()
     cam = Camera(position=(0, 0, -4))
 
-    renderer = Renderer3D(screen, cam, pix_size=3)
+    renderer = Renderer3D(screen, cam, pix_size=3, debug=True)
     
     #for i in range(15):
     #    for j in range(15):
@@ -207,7 +207,7 @@ def main(use_mouse = False, debug = False):
 if __name__ == "__main__":
     try:
         main(
-            use_mouse = False,
+            use_mouse = False, 
             debug     = True
         )
     except Exception as e:

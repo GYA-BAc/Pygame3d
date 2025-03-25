@@ -20,13 +20,16 @@ class Renderer3D:
         'surface', 
         'z_buffer',
         'meshes',
+        'debug'
     ]
 
     __MAX_Z = 1000
     __OFFSET_Z = .1
     __FOV_RAD = 360
 
-    def __init__(self, surface: pygame.surface.Surface, cam: Camera, pix_size: int = 1):
+    def __init__(self, surface: pygame.surface.Surface, cam: Camera, pix_size: int = 1, debug=False):
+
+        self.debug = debug
 
         # define constants
         self.__WIDTH, self.__HEIGHT = surface.get_size()
@@ -112,14 +115,26 @@ class Renderer3D:
                 global_texture_atlas[textures[index].item()], #use .item() to force np uint to native int
                 uv_coords[index]
             )
-            
-            #pygame.draw.polygon(self.surface, (0, 0, 0), [(int(point[0]+self.__WIDTH//2), int(self.__HEIGHT//2-point[1])) for point in tri], width=1)
-            # numrendered += 1 #
+       
 
         surf = pygame.surfarray.make_surface(surface)
-        # pygame.draw.circle(surf, (255, 0 ,0), [triangles[1][2][0]+self.__WIDTH//2//self.pix_size, self.__HEIGHT//2//self.pix_size-triangles[1][2][1]], 15)
+        
+        if (self.debug):
+            # wireframe mesh
+            scoords = lambda x: (self.__WIDTH//self.pix_size//2+x[0], self.__HEIGHT//self.pix_size//2-x[1])
+            for i, tri in enumerate(triangles):
+                if culled_faces[i]: continue
+
+                # only render close wireframes
+                if (tri[0][2]+tri[1][2]+tri[2][2]/3 > 50): continue
+
+                pygame.draw.line(surf, (255,255,255), scoords(tri[0]), scoords(tri[1]), width=1)
+                pygame.draw.line(surf, (255,255,255), scoords(tri[1]), scoords(tri[2]), width=1)
+                pygame.draw.line(surf, (255,255,255), scoords(tri[2]), scoords(tri[0]), width=1)
+
         # scale back to surface size
         surf = pygame.transform.scale(surf, (self.__WIDTH, self.__HEIGHT))
+        
         self.surface.blit(surf, (0, 0)) 
         # print(numrendered) #
 
