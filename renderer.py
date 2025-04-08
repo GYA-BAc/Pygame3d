@@ -437,15 +437,17 @@ class Renderer3D:
             delta_y = y - y_start
             x1 = x_start + int(delta_y*x_slope_1)
             z1 = z_start + delta_y*z_slope_1
-
+            
             if y < y_middle:
                 x2 = x_start + int(delta_y*x_slope_2)
-                z2 = z_start + delta_y*z_slope_2
-        
+                z2 = z_start + delta_y*z_slope_2 
+                # save right line slope
+                r_slope = x_slope_2
             else:
                 delta_y = y - y_middle
                 x2 = x_middle + int(delta_y*x_slope_3)
                 z2 = z_middle + delta_y*z_slope_3
+                r_slope = x_slope_3
                     
             # x1 should be smaller
             if x1 > x2:
@@ -453,15 +455,28 @@ class Renderer3D:
                 z1, z2 = z2, z1
         
             z_slope = (z2 - z1)/(x2 - x1 + 1e-32)
-        
+       
             # min and max used to cut off pixels not in screen
             for x in range(max(0, int(x1)), min(surf_width, int(x2))):
                 z = 1/(z1 + (x - x1)*z_slope + 1e-32) # retrive z
-                
-                # for now, wireframe draw in radius 
+    
+                shade = max(0, 1 - z/(50))
 
-                if (z > 50):
+                # stop if too far
+                if (shade == 0):
                     continue
-                 
-                if (x == x1 or x == x2):
-                    surfarray[x, y] = np.asarray((255, 255, 255))
+                
+                # closest line
+                d = min(
+                    abs(((y_stop-y_start)*x - (x_stop-x_start)*y + x_stop*y_start - y_stop*x_start)/np.sqrt((y_stop-y_start)**2+(x_stop-x_start)**2)),
+                    min(
+                    abs(((y_middle-y_start)*x - (x_middle-x_start)*y + x_middle*y_start - y_middle*x_start)/np.sqrt((y_middle-y_start)**2+(x_middle-x_start)**2)),
+                    abs(((y_stop-y_middle)*x - (x_stop-x_middle)*y + x_stop*y_middle - y_stop*x_middle)/np.sqrt((y_stop-y_middle)**2+(x_stop-x_middle)**2))
+                    )
+                ) 
+
+                # draw pixel if close enough to line
+                if (d < 0.5):
+                    surfarray[x, y] = np.asarray((255,255,255))*shade
+
+           
