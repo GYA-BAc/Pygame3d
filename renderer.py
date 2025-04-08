@@ -115,22 +115,34 @@ class Renderer3D:
                 global_texture_atlas[textures[index].item()], #use .item() to force np uint to native int
                 uv_coords[index]
             )
+
+        # wireframe rendering
+        if (self.debug):
+            for index, tri in enumerate(triangles):
+                if culled_faces[index]: continue
+
+                self.__draw_wireframe(
+                    surface,
+                    tri,
+                )
        
 
         surf = pygame.surfarray.make_surface(surface)
         
-        if (self.debug):
-            # wireframe mesh
-            scoords = lambda x: (self.__WIDTH//self.pix_size//2+x[0], self.__HEIGHT//self.pix_size//2-x[1])
-            for i, tri in enumerate(triangles):
-                if culled_faces[i]: continue
+        # legacy wireframe
+       # if (self.debug):
+       #     # wireframe mesh
+       #     scoords = lambda x: (self.__WIDTH//self.pix_size//2+x[0], self.__HEIGHT//self.pix_size//2-x[1])
+       #     for i, tri in enumerate(triangles):
+       #         if culled_faces[i]: continue
 
-                # only render close wireframes
-                if (tri[0][2]+tri[1][2]+tri[2][2]/3 > 50): continue
+       #         # only render close wireframes
+       #         # if (np.mean(tri[:,2])**2 > 50): continue
+       #         if (np.mean(tri[:,0])**2 + np.mean(tri[:,1])**2 + np.mean(tri[:,2])**2 > 50**2): continue
 
-                pygame.draw.line(surf, (255,255,255), scoords(tri[0]), scoords(tri[1]), width=1)
-                pygame.draw.line(surf, (255,255,255), scoords(tri[1]), scoords(tri[2]), width=1)
-                pygame.draw.line(surf, (255,255,255), scoords(tri[2]), scoords(tri[0]), width=1)
+       #         pygame.draw.line(surf, (255,255,255), scoords(tri[0]), scoords(tri[1]), width=1)
+       #         pygame.draw.line(surf, (255,255,255), scoords(tri[1]), scoords(tri[2]), width=1)
+       #         pygame.draw.line(surf, (255,255,255), scoords(tri[2]), scoords(tri[0]), width=1)
 
         # scale back to surface size
         surf = pygame.transform.scale(surf, (self.__WIDTH, self.__HEIGHT))
@@ -394,5 +406,62 @@ class Renderer3D:
                 if (min(uv) >= 0 and max(uv) <= 1): 
                     surfarray[x, y] = texture[int(uv[0]*tex_size[0])][int(uv[1]*tex_size[1])]*shade
     
+    
+    @staticmethod
+    @numba.njit()
+    def __draw_wireframe(surfarray, triangle):
+
+        surf_width, surf_height = len(surfarray), len(surfarray[0])
+        centered_tri = np.asarray([(int(point[0]+surf_width//2), int(surf_height//2-point[1]), point[2]) for point in triangle])
+    
+        sorted_y = centered_tri[:,1].argsort()
+    
+        x_start, y_start, z_start = centered_tri[sorted_y[0]]
+        x_middle, y_middle, z_middle = centered_tri[sorted_y[1]]
+        x_stop, y_stop, z_stop = centered_tri[sorted_y[2]] 
+    
+        x_slope_1 = (x_stop - x_start)/(y_stop - y_start + 1e-32)
+        x_slope_2 = (x_middle - x_start)/(y_middle - y_start + 1e-32)
+        x_slope_3 = (x_stop - x_middle)/(y_stop - y_middle + 1e-32)  
         
     
+        # invert z for interpolation
+        z_start, z_middle, z_stop = 1/(z_start +1e-32), 1/(z_middle + 1e-32), 1/(z_stop +1e-32)
+    
+        z_slope_1 = (z_stop - z_start)/(y_stop - y_start + 1e-32) 
+        z_slope_2 = (z_middle - z_start)/(y_middle - y_start + 1e-32) 
+        z_slope_3 = (z_stop - z_middle)/(y_stop - y_middle + 1e-32)  
+        
+        for y in range(max(0, int(y_start)), min(surf_height, int(y_stop))):
+    
+            delta_y = y - y_start
+            x1 = x_start + int(delta_y*x_slope_1)
+            z1 = z_start + delta_y*z_slope_1
+
+            if y < y_middle:
+                x2 = x_start + int(delta_y*x_slope_2)
+                z2 = z_start + delta_y*z_slope_2
+        
+            else:
+                delta_y = y - y_middle
+                x2 = x_middle + int(delta_y*x_slope_3)
+                z2 = z_middle + delta_y*z_slope_3
+                    
+            # x1 should be smaller
+            if x1 > x2:
+                x1, x2 = x2, x1
+                z1, z2 = z2, z1
+        
+            z_slope = (z2 - z1)/(x2 - x1 + 1e-32)
+        
+            # min and max used to cut off pixels not in screen
+            for x in range(max(0, int(x1)), min(surf_width, int(x2))):
+                z = 1/(z1 + (x - x1)*z_slope + 1e-32) # retrive z
+                
+                # for now, wireframe draw in radius 
+
+                if (z > 50):
+                    continue
+                 
+                if (x == x1 or x == x2):
+                    surfarray[x, y] = np.asarray((255, 255, 255))
